@@ -1,0 +1,87 @@
+{
+  "manualHome": "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html",
+  "parameters": {
+    "supply_low": {
+      "label": "Supply fan low speed setpoint",
+      "notes": [
+        "Analog Value default used by the supply fan modulation logic.",
+        "Marked controller-specific in many templates — use Reinitialize controller specific values when downloading."
+      ],
+      "manualUrl": "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/846312843.html"
+    },
+    "supply_high": {
+      "label": "Supply fan high speed setpoint",
+      "notes": [
+        "Upper supply modulation limit for occupied / high demand operation."
+      ]
+    },
+    "dmp_min": {
+      "label": "Minimum damper position (%)",
+      "notes": [
+        "Minimum fresh-air or relief damper command while ventilation is enabled."
+      ]
+    },
+    "co2_limit": {
+      "label": "CO2 concentration limit",
+      "notes": [
+        "Threshold used by demand-controlled ventilation logic."
+      ]
+    },
+    "co2_damper": {
+      "label": "CO2 damper modulation parameter",
+      "notes": [
+        "Scaling or setpoint linked to CO2-based damper control."
+      ]
+    },
+    "damper_feedback": {
+      "label": "Damper feedback hardware input",
+      "notes": [
+        "SignalLowLimit / SignalHighLimit define the raw input range (often 0–10 V).",
+        "Minimum / Maximum define the engineering range shown in BACnet (often 0–100 %)."
+      ]
+    },
+    "vent_disable": {
+      "label": "Ventilation disable logic input",
+      "notes": [
+        "This is usually a logic port inside a composite block, not a simple DefaultValue point.",
+        "Prefer editing wiring in EC-gfxProgram if you need to change behavior rather than a numeric default."
+      ]
+    },
+    "econo_delta": {
+      "label": "Economizer delta-T or enthalpy differential",
+      "notes": [
+        "Used by economizer enable / disable logic."
+      ]
+    },
+    "stage_delay": {
+      "label": "Compressor / heat pump stage delay",
+      "notes": [
+        "Minimum time between stage changes."
+      ]
+    },
+    "discharge_min": {
+      "label": "Minimum discharge air temperature",
+      "notes": [
+        "Lower limit used by discharge temperature control or freeze protection."
+      ]
+    },
+    "HardwareInput.Default": {
+      "label": "Hardware input default engineering value",
+      "notes": [
+        "Initial/default value for the scaled hardware input when applicable."
+      ]
+    },
+    "HardwareInput.Minimum": {
+      "label": "Hardware input engineering minimum",
+      "notes": [
+        "Low end of the BACnet-presented range after scaling."
+      ]
+    },
+    "HardwareInput.Maximum": {
+      "label": "Hardware input engineering maximum",
+      "notes": [
+        "High end of the BACnet-presented range after scaling."
+      ]
+    }
+  }
+}

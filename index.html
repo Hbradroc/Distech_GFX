@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distech GFX Parameter Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script defer src="gfx-core.js?v=1.0.0"></script>
+    <script defer src="app.js?v=1.0.0"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <div class="card-top">
+          <div class="card-top-actions">
+            <div class="admin-menu" id="adminMenu">
+              <button type="button" class="admin-menu-btn" id="adminMenuBtn" aria-haspopup="true" aria-expanded="false" disabled>
+                Admin
+              </button>
+              <div class="admin-dropdown" id="adminDropdown" hidden>
+                <button type="button" id="openEditorBtn">Edit parameters…</button>
+                <button type="button" id="exportCsvBtn">Export CSV</button>
+              </div>
+            </div>
+            <a class="email-link" href="mailto:hbradroc@uwo.ca" aria-label="Email hbradroc@uwo.ca">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.2-8 5.2-8-5.2V6l8 5 8-5v2.2Z" />
+              </svg>
+              <span>hbradroc@uwo.ca</span>
+            </a>
+          </div>
+        </div>
+
+        <h1>Distech GFX Editor</h1>
+        <p class="sub">
+          Upload an EC-gfxProgram <code>.gfx</code> file, review or edit BACnet setpoints and hardware scaling,
+          then download a modified <code>.gfx</code> for import in EC-gfxProgram.
+        </p>
+
+        <div class="field">
+          <label for="gfxFile">EC-gfxProgram file (.gfx)</label>
+          <input id="gfxFile" type="file" accept=".gfx" />
+        </div>
+
+        <div class="field filter-field">
+          <span class="format-label">Default parameter view</span>
+          <div class="format-choice" role="group" aria-label="Default parameter categories">
+            <label class="format-option">
+              <input type="checkbox" name="defaultCategories" value="AnalogValue" checked />
+              Analog setpoints
+            </label>
+            <label class="format-option">
+              <input type="checkbox" name="defaultCategories" value="HardwareInput" checked />
+              Hardware inputs
+            </label>
+            <label class="format-option">
+              <input type="checkbox" name="defaultCategories" value="BinaryValue" />
+              Binary values
+            </label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="loadBtn" type="button">Load parameters</button>
+          <button id="downloadBtn" type="button" class="secondary" disabled>Download .gfx</button>
+        </div>
+
+        <p id="readyHint" class="ready-hint" hidden>File loaded. Use Admin → Edit parameters, then download the modified .gfx.</p>
+
+        <pre id="log" class="log" aria-live="polite"></pre>
+      </section>
+      <p class="footer-note">Systemair 467 · <span id="appVersion"></span></p>
+    </main>
+
+    <div id="editorBackdrop" class="editor-backdrop" hidden aria-hidden="true">
+      <div class="editor-panel" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+        <header class="editor-header">
+          <h2 id="editorTitle">Edit parameters</h2>
+          <button type="button" class="icon-btn" id="closeEditorBtn" aria-label="Close editor" title="Close (Esc)">×</button>
+        </header>
+
+        <div class="editor-toolbar">
+          <input type="search" id="paramSearch" placeholder="Search parameter name…" autocomplete="off" />
+          <select id="categoryFilter" aria-label="Filter by category">
+            <option value="">All categories</option>
+          </select>
+          <label class="filter-toggle">
+            <input type="checkbox" id="showAllParams" />
+            Show all parameters
+          </label>
+        </div>
+
+        <p class="editor-meta" id="editorMeta"></p>
+
+        <div class="editor-body">
+          <div class="editor-list" id="editorList"></div>
+          <aside class="editor-help" id="editorHelp" aria-live="polite">
+            <p class="editor-help-placeholder">Click a parameter or <strong>Info</strong> for EC-gfxProgram notes.</p>
+          </aside>
+        </div>
+
+        <footer class="editor-footer">
+          <button type="button" class="secondary" id="editorDownloadBtn">Download .gfx</button>
+          <button type="button" class="secondary" id="editorCloseFooterBtn">Close</button>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

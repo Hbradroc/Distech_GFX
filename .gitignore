@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local customer project files
+*.gfx
+*.gfx.bak
+parameters.csv
+_extracted_gfx/
+_temp_gfx.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artifacts
+test_*.gfx
+test_*.csv
