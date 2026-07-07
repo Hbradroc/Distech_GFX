@@ -126,6 +126,48 @@ const GfxCore = (() => {
     return childElements(parent).find((child) => child.tagName === tag) || null;
   }
 
+  function isCorruptDisplayText(text) {
+    const raw = String(text ?? "").trim();
+    if (!raw) return false;
+    if (raw.length > 48 && /(.)\1{8,}/.test(raw)) return true;
+    if (/[`\]\[]/.test(raw) && /\d{8,}/.test(raw)) return true;
+    if (raw.length > 120) return true;
+    return false;
+  }
+
+  function sanitizeDisplayText(text, fallback = "") {
+    const raw = String(text ?? "").trim();
+    if (!raw) return fallback;
+    if (isCorruptDisplayText(raw)) return fallback;
+    if (raw.length > 80) return `${raw.slice(0, 77)}…`;
+    return raw;
+  }
+
+  function formatParameterValue(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    if (isCorruptDisplayText(raw)) return "(corrupt value in template)";
+    if (raw.includes("=") && raw.includes("|")) {
+      const pairs = raw.split("|").filter(Boolean);
+      if (pairs.length > 2 && pairs.every((part) => part.includes("="))) {
+        const preview = pairs.slice(0, 3).join(", ");
+        return pairs.length > 3 ? `${preview}… (${pairs.length} BACnet properties)` : preview;
+      }
+    }
+    if (raw.includes("|") && !raw.includes("=")) {
+      const first = raw.split("|")[0];
+      if (first !== "") return first;
+    }
+    return sanitizeDisplayText(raw, raw);
+  }
+
+  function sanitizeBlockName(name, tag, blockId) {
+    const cleaned = sanitizeDisplayText(name, "");
+    if (cleaned && !["Internal Constant", "Monitor"].includes(cleaned)) return cleaned;
+    if (tag === "InternalConstantNumeric") return `LogicConstant#${blockId}`;
+    return `${tag}#${blockId}`;
+  }
+
   function paramKey(source, category, name, field) {
     return `${source}\0${category}\0${name}\0${field}`;
   }
@@ -151,9 +193,11 @@ const GfxCore = (() => {
     for (const el of doc.getElementsByTagName("*")) {
       const id = el.getAttribute("id");
       if (!id) continue;
+      const tag = el.tagName;
+      const rawName = textContent(el, "Name") || textContent(el, "NAME");
       index.set(id, {
-        tag: el.tagName,
-        name: textContent(el, "Name") || textContent(el, "NAME"),
+        tag,
+        name: sanitizeBlockName(rawName, tag, id),
       });
     }
     return index;
@@ -176,8 +220,10 @@ const GfxCore = (() => {
   function wiringBlockLabel(blockIndex, blockId) {
     const block = blockIndex.get(blockId);
     if (!block) return `Block#${blockId}`;
-    const name = block.name && !["Internal Constant", "Monitor"].includes(block.name) ? block.name : "";
-    if (name) return `${name} (${block.tag})`;
+    const name = sanitizeDisplayText(block.name, "");
+    if (name && !["Internal Constant", "Monitor"].includes(name)) {
+      return name.includes(block.tag) ? name : `${name} (${block.tag})`;
+    }
     if (block.tag === "InternalConstantNumeric") return `LogicConstant#${blockId}`;
     return `${block.tag}#${blockId}`;
   }
@@ -264,6 +310,250 @@ const GfxCore = (() => {
     return null;
   }
 
+  function portsForBlock(wiringGraph, blockId, sheetDocId = "") {
+    const ports = new Set();
+    const sheetBlocks = sheetDocId
+      ? new Set(
+          (wiringGraph.sheetDiagrams || [])
+            .find((sheet) => sheet.docId === sheetDocId)
+            ?.blocks.map((block) => block.id) || [],
+        )
+      : null;
+
+    for (const link of wiringGraph.links || []) {
+      if (sheetBlocks && !sheetBlocks.has(link.from.id) && !sheetBlocks.has(link.to.id)) continue;
+      if (link.from.id === blockId && link.from.port) ports.add(link.from.port);
+      if (link.to.id === blockId && link.to.port) ports.add(link.to.port);
+    }
+    return [...ports].sort((a, b) => a.localeCompare(b));
+  }
+
+  function tracePortFlow(wiringGraph, blockId, portName = "") {
+    const norm = (value) => String(value || "").toLowerCase();
+    const targetPort = norm(portName);
+    const inputs = [];
+    const outputs = [];
+    for (const link of wiringGraph.links || []) {
+      if (link.to.id === blockId && (!targetPort || norm(link.to.port) === targetPort)) {
+        inputs.push({
+          port: link.to.port,
+          from: {
+            id: link.from.id,
+            label: link.from.label,
+            port: link.from.port,
+            sheet: link.from.sheet,
+            tag: link.from.tag,
+          },
+        });
+      }
+      if (link.from.id === blockId && (!targetPort || norm(link.from.port) === targetPort)) {
+        outputs.push({
+          port: link.from.port,
+          to: {
+            id: link.to.id,
+            label: link.to.label,
+            port: link.to.port,
+            sheet: link.to.sheet,
+            tag: link.to.tag,
+          },
+        });
+      }
+    }
+    return { blockId, portName, inputs, outputs };
+  }
+
+  function traceSignalChain(wiringGraph, blockId, portName, direction = "down", maxDepth = 4) {
+    const steps = [];
+    const visited = new Set();
+
+    function walk(currentId, currentPort, depth) {
+      const key = `${direction}:${currentId}:${currentPort}:${depth}`;
+      if (visited.has(key) || depth >= maxDepth) return;
+      visited.add(key);
+      const flow = tracePortFlow(wiringGraph, currentId, currentPort);
+      const links = direction === "down" ? flow.outputs : flow.inputs;
+      for (const link of links) {
+        const endpoint = direction === "down" ? link.to : link.from;
+        const step = {
+          depth,
+          port: direction === "down" ? link.port : link.port,
+          from: direction === "down" ? { id: currentId, port: currentPort } : endpoint,
+          to: direction === "down" ? endpoint : { id: currentId, port: currentPort },
+        };
+        steps.push(step);
+        walk(endpoint.id, endpoint.port, depth + 1);
+      }
+    }
+
+    walk(blockId, portName, 0);
+    return steps;
+  }
+
+  function resolveParamSignal(wiringGraph, param) {
+    if (!wiringGraph || !param) return null;
+    if (param.category === "CompositeInput" || param.category === "CompositeOutput") {
+      const dot = param.name.lastIndexOf(".");
+      if (dot < 0) return null;
+      const compositeName = param.name.slice(0, dot);
+      const portName = param.name.slice(dot + 1);
+      const composite = (wiringGraph.composites || []).find((entry) => entry.name === compositeName);
+      if (!composite) return null;
+      return {
+        blockId: composite.id,
+        portName,
+        sheet: composite.sheet,
+        role: param.category === "CompositeInput" ? "input" : "output",
+        label: param.name,
+      };
+    }
+    const blockMatch = param.name.match(/#(\d+)$/);
+    if (blockMatch) {
+      return {
+        blockId: blockMatch[1],
+        portName: "",
+        sheet: "",
+        role: "block",
+        label: param.name,
+      };
+    }
+    const crossRef = lookupCrossReference(wiringGraph, param.name);
+    if (crossRef) {
+      const hub = crossRef.hubs[0];
+      return {
+        blockId: hub?.blockId || "",
+        portName: crossRef.tagName,
+        sheet: hub?.sheet || "",
+        role: "tag",
+        label: crossRef.tagName,
+      };
+    }
+    return null;
+  }
+
+  function blockLabelFromGraph(wiringGraph, blockId) {
+    const option = (wiringGraph.focusOptions || []).find((entry) => entry.id === blockId);
+    return option?.label || `Block#${blockId}`;
+  }
+
+  function parseBds(bdsText) {
+    const parts = (bdsText || "").split(",").map((part) => Number(part.trim()));
+    if (parts.length < 4 || parts.some((value) => Number.isNaN(value))) return null;
+    const [x1, y1, x2, y2] = parts;
+    return {
+      x: Math.min(x1, x2),
+      y: Math.min(y1, y2),
+      w: Math.max(Math.abs(x2 - x1), 8),
+      h: Math.max(Math.abs(y2 - y1), 8),
+      cx: (x1 + x2) / 2,
+      cy: (y1 + y2) / 2,
+    };
+  }
+
+  function blockVisualCategory(tag) {
+    if (tag === "OutgoingTag" || tag === "IncomingTag") return "reference";
+    if (tag.includes("HardwareOutput")) return "hwout";
+    if (tag.includes("HardwareInput")) return "hwin";
+    if (tag.includes("Pid") || tag.includes("JPID")) return "pid";
+    if (tag.startsWith("BacnetAnalog") || tag.startsWith("BacnetBinary") || tag.startsWith("BacnetMultiState")) {
+      return "bacnet";
+    }
+    if (tag === "InternalConstantNumeric") return "constant";
+    if (tag === "SimpleCompositeBlock") return "composite";
+    return "logic";
+  }
+
+  function parseSheetDiagrams(doc, sheetMap, blockIndex) {
+    const sheets = new Map();
+
+    function getSheet(docId) {
+      if (!sheets.has(docId)) {
+        sheets.set(docId, {
+          docId,
+          name: sheetMap.get(docId) || `Sheet #${docId}`,
+          blocks: new Map(),
+          links: [],
+          bounds: { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+        });
+      }
+      return sheets.get(docId);
+    }
+
+    function expandBounds(sheet, bds) {
+      sheet.bounds.minX = Math.min(sheet.bounds.minX, bds.x);
+      sheet.bounds.minY = Math.min(sheet.bounds.minY, bds.y);
+      sheet.bounds.maxX = Math.max(sheet.bounds.maxX, bds.x + bds.w);
+      sheet.bounds.maxY = Math.max(sheet.bounds.maxY, bds.y + bds.h);
+    }
+
+    for (const el of doc.getElementsByTagName("*")) {
+      const id = el.getAttribute("id");
+      const docRef = el.getElementsByTagName("Doc")[0]?.getAttribute("ref");
+      const bdsEl = el.getElementsByTagName("Bds")[0];
+      if (!id || !docRef || !bdsEl) continue;
+      const bds = parseBds(bdsEl.textContent?.trim() || "");
+      if (!bds) continue;
+      const tag = el.tagName;
+      const rawName = textContent(el, "Name") || textContent(el, "NAME") || "";
+      const name = sanitizeBlockName(rawName, tag, id);
+      const sheet = getSheet(docRef);
+      sheet.blocks.set(id, {
+        id,
+        tag,
+        name,
+        tagName: tagNameFromBlock(el),
+        label: wiringBlockLabel(blockIndex, id),
+        category: blockVisualCategory(tag),
+        x: bds.x,
+        y: bds.y,
+        w: bds.w,
+        h: bds.h,
+        cx: bds.cx,
+        cy: bds.cy,
+      });
+      expandBounds(sheet, bds);
+    }
+
+    const blockDoc = new Map();
+    for (const [docId, sheet] of sheets) {
+      for (const blockId of sheet.blocks.keys()) {
+        blockDoc.set(blockId, docId);
+      }
+    }
+
+    for (const link of doc.getElementsByTagName("Link")) {
+      const fromId = link.getElementsByTagName("FB")[0]?.getAttribute("ref");
+      const toId = link.getElementsByTagName("TB")[0]?.getAttribute("ref");
+      if (!fromId || !toId) continue;
+      const docFrom = blockDoc.get(fromId);
+      const docTo = blockDoc.get(toId);
+      if (!docFrom || docFrom !== docTo) continue;
+      const sheet = sheets.get(docFrom);
+      if (!sheet?.blocks.has(fromId) || !sheet.blocks.has(toId)) continue;
+      sheet.links.push({
+        fromId,
+        toId,
+        fromPort: textContent(link, "FP"),
+        toPort: textContent(link, "TP"),
+      });
+    }
+
+    return [...sheets.values()]
+      .filter((sheet) => sheet.blocks.size > 0)
+      .map((sheet) => ({
+        docId: sheet.docId,
+        name: sheet.name,
+        blockCount: sheet.blocks.size,
+        linkCount: sheet.links.length,
+        bounds:
+          sheet.bounds.minX === Infinity
+            ? { minX: 0, minY: 0, maxX: 1200, maxY: 900 }
+            : sheet.bounds,
+        blocks: [...sheet.blocks.values()],
+        links: sheet.links,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   function wiringEndpoint(blockIndex, blockId, port, blockSheets) {
     const block = blockIndex.get(blockId);
     return {
@@ -282,6 +572,7 @@ const GfxCore = (() => {
     const sheetMap = buildSheetMap(doc);
     const blockSheets = buildBlockSheetMap(doc, sheetMap);
     const { crossReferences, crossRefByTag } = parseCrossReferences(doc, sheetMap);
+    const sheetDiagrams = parseSheetDiagrams(doc, sheetMap, blockIndex);
     const composites = [];
     const blockTypes = new Set();
 
@@ -333,9 +624,11 @@ const GfxCore = (() => {
       sheets,
       crossReferences,
       crossRefByTag,
+      sheetDiagrams,
       blockCount: blockIndex.size,
       linkCount: links.length,
       compositeCount: composites.length,
+      sheetDiagramCount: sheetDiagrams.length,
       crossRefCount: crossReferences.length,
       hubCount: crossReferences.reduce((sum, row) => sum + row.hubs.length, 0),
       targetCount: crossReferences.reduce((sum, row) => sum + row.targets.length, 0),
@@ -1304,6 +1597,14 @@ const GfxCore = (() => {
     DEFAULT_VALUE_BLOCKS,
     BACNET_RESOURCE_TAGS,
     isOtherCategory,
+    sanitizeDisplayText,
+    formatParameterValue,
+    sanitizeBlockName,
+    tracePortFlow,
+    traceSignalChain,
+    resolveParamSignal,
+    portsForBlock,
+    blockLabelFromGraph,
     paramKey,
     sectionForCategory,
     parseAllParameters,

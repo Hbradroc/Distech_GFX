@@ -3,18 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Distech GFX — Logic Cross-Reference Viewer</title>
+    <title>Distech GFX — Logic Diagram Viewer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="wiring.css?v=1.6.0" />
-    <script defer src="wiring.js?v=1.6.0"></script>
+    <link rel="stylesheet" href="wiring.css?v=1.8.0" />
+    <script defer src="gfx-core.js?v=1.8.0"></script>
+    <script defer src="wiring.js?v=1.8.0"></script>
   </head>
   <body>
     <header class="wiring-toolbar no-print">
       <div class="wiring-toolbar-title">
-        <h1>Logic cross-reference viewer</h1>
-        <p id="wiringSubtitle" class="wiring-subtitle">Where each tag is defined and used across programming sheets</p>
+        <h1>Logic diagram viewer</h1>
+        <p id="wiringSubtitle" class="wiring-subtitle">EC-gfxProgram block layout — view only</p>
       </div>
       <div class="wiring-toolbar-actions">
         <button type="button" id="printBtn" class="primary">Print / Save PDF</button>
@@ -31,11 +32,51 @@
       <p id="wiringStats" class="wiring-stats"></p>
 
       <div class="wiring-tabs no-print" role="tablist" aria-label="Viewer mode">
-        <button type="button" id="tabCrossRef" class="wiring-tab active" role="tab" aria-selected="true">Cross-references</button>
+        <button type="button" id="tabFlow" class="wiring-tab active" role="tab" aria-selected="true">Signal flow</button>
+        <button type="button" id="tabDiagram" class="wiring-tab" role="tab" aria-selected="false">Block diagram</button>
+        <button type="button" id="tabCrossRef" class="wiring-tab" role="tab" aria-selected="false">Cross-references</button>
         <button type="button" id="tabWiring" class="wiring-tab" role="tab" aria-selected="false">Sheet wiring</button>
       </div>
 
-      <section id="crossRefPanel" class="wiring-panel">
+      <section id="flowPanel" class="wiring-panel">
+        <div class="wiring-controls no-print" aria-label="Signal flow filters">
+          <select id="flowSheet" aria-label="Programming sheet">
+            <option value="">Select sheet…</option>
+          </select>
+          <select id="flowBlock" aria-label="Block on sheet">
+            <option value="">Select block…</option>
+          </select>
+          <select id="flowPort" aria-label="Port on block">
+            <option value="">All ports on this block</option>
+          </select>
+        </div>
+        <section id="flowDiagram" class="wiring-diagram flow-diagram" aria-label="Signal flow for selected block"></section>
+        <p id="flowEmpty" class="wiring-empty">Pick a sheet and block to see what feeds it and what it controls.</p>
+      </section>
+
+      <section id="diagramPanel" class="wiring-panel" hidden>
+        <div class="wiring-controls no-print diagram-controls" aria-label="Block diagram filters">
+          <select id="diagramSheet" aria-label="Programming sheet">
+            <option value="">Select sheet…</option>
+          </select>
+          <input type="search" id="diagramSearch" placeholder="Highlight tag or block name…" autocomplete="off" />
+          <label class="wiring-toggle">
+            <input type="checkbox" id="diagramShowLabels" checked />
+            Show all labels
+          </label>
+        </div>
+        <div class="diagram-legend no-print">
+          <span class="legend-item legend-reference">Reference</span>
+          <span class="legend-item legend-bacnet">BACnet</span>
+          <span class="legend-item legend-pid">PID / logic</span>
+          <span class="legend-item legend-hwout">Hardware I/O</span>
+        </div>
+        <div id="diagramCanvas" class="diagram-canvas" aria-label="EC-gfxProgram style block diagram"></div>
+        <section id="diagramFocus" class="wiring-diagram diagram-focus no-print" hidden aria-label="Selected block signal flow"></section>
+        <p id="diagramEmpty" class="wiring-empty" hidden>Select a programming sheet, then click a block to trace its inputs and outputs.</p>
+      </section>
+
+      <section id="crossRefPanel" class="wiring-panel" hidden>
         <div class="wiring-controls no-print" aria-label="Cross-reference filters">
           <input type="search" id="xrefSearch" placeholder="Search tag name (e.g. fan_supply, space_temp)…" autocomplete="off" />
           <select id="xrefSheetFilter" aria-label="Filter by programming sheet">
@@ -91,7 +132,7 @@
       </section>
 
       <footer class="wiring-footer">
-        <p>Read-only — matches EC-gfxProgram Reference Hub / Reference Target tags. Use EC-gfxProgram to edit logic.</p>
+        <p>Read-only view. Use <strong>Signal flow</strong> to follow inputs → block → outputs. Use EC-gfxProgram to edit logic.</p>
       </footer>
     </main>
   </body>

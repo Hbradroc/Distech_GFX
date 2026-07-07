@@ -4,10 +4,25 @@ const wiringSubtitle = document.getElementById("wiringSubtitle");
 const wiringStats = document.getElementById("wiringStats");
 const printTitle = document.getElementById("printTitle");
 const printMeta = document.getElementById("printMeta");
+const tabFlow = document.getElementById("tabFlow");
+const tabDiagram = document.getElementById("tabDiagram");
 const tabCrossRef = document.getElementById("tabCrossRef");
 const tabWiring = document.getElementById("tabWiring");
+const flowPanel = document.getElementById("flowPanel");
+const diagramPanel = document.getElementById("diagramPanel");
 const crossRefPanel = document.getElementById("crossRefPanel");
 const wiringPanel = document.getElementById("wiringPanel");
+const flowSheet = document.getElementById("flowSheet");
+const flowBlock = document.getElementById("flowBlock");
+const flowPort = document.getElementById("flowPort");
+const flowDiagram = document.getElementById("flowDiagram");
+const flowEmpty = document.getElementById("flowEmpty");
+const diagramSheet = document.getElementById("diagramSheet");
+const diagramSearch = document.getElementById("diagramSearch");
+const diagramShowLabels = document.getElementById("diagramShowLabels");
+const diagramCanvas = document.getElementById("diagramCanvas");
+const diagramFocus = document.getElementById("diagramFocus");
+const diagramEmpty = document.getElementById("diagramEmpty");
 const xrefSearch = document.getElementById("xrefSearch");
 const xrefSheetFilter = document.getElementById("xrefSheetFilter");
 const xrefFocus = document.getElementById("xrefFocus");
@@ -26,8 +41,24 @@ const printBtn = document.getElementById("printBtn");
 const closeBtn = document.getElementById("closeBtn");
 
 let payload = null;
-let activeTab = "xref";
+let activeTab = "flow";
 let selectedXrefTag = "";
+let selectedBlockId = "";
+let selectedPortName = "";
+let diagramScale = 1;
+
+const core = () => window.GfxCore || {};
+
+const CATEGORY_COLORS = {
+  reference: { fill: "#bbf7d0", stroke: "#15803d" },
+  bacnet: { fill: "#fed7aa", stroke: "#c2410c" },
+  hwout: { fill: "#bfdbfe", stroke: "#1d4ed8" },
+  hwin: { fill: "#bfdbfe", stroke: "#1d4ed8" },
+  pid: { fill: "#ddd6fe", stroke: "#6d28d9" },
+  constant: { fill: "#f3f4f6", stroke: "#6b7280" },
+  composite: { fill: "#fde68a", stroke: "#b45309" },
+  logic: { fill: "#e9d5ff", stroke: "#7e22ce" },
+};
 
 function escapeHtml(text) {
   return String(text)
@@ -211,23 +242,327 @@ function renderWiringTable() {
   }
 }
 
+function cleanLabel(text, fallback = "") {
+  const gfx = core();
+  if (gfx.sanitizeDisplayText) return gfx.sanitizeDisplayText(text, fallback);
+  const raw = String(text ?? "").trim();
+  if (!raw || raw.length > 80) return fallback || raw.slice(0, 77);
+  return raw;
+}
+
+function getSheetDiagramByDocId(docId) {
+  return (payload.wiring.sheetDiagrams || []).find((sheet) => sheet.docId === docId) || null;
+}
+
+function getSheetDiagramByName(name) {
+  return (payload.wiring.sheetDiagrams || []).find((sheet) => sheet.name === name) || null;
+}
+
+function blocksOnSheet(docId) {
+  const sheet = getSheetDiagramByDocId(docId);
+  if (!sheet) return [];
+  return [...sheet.blocks].sort((a, b) => cleanLabel(a.name || a.label).localeCompare(cleanLabel(b.name || b.label)));
+}
+
+function setFlowSelection(docId, blockId, portName = "") {
+  if (docId) flowSheet.value = docId;
+  populateFlowBlocks();
+  if (blockId) flowBlock.value = blockId;
+  populateFlowPorts();
+  if (portName) flowPort.value = portName;
+  selectedBlockId = flowBlock.value;
+  selectedPortName = flowPort.value;
+  diagramSheet.value = docId || diagramSheet.value;
+}
+
+function populateFlowSheets() {
+  for (const sheet of payload.wiring.sheetDiagrams || []) {
+    const option = document.createElement("option");
+    option.value = sheet.docId;
+    option.textContent = `${sheet.name} (${sheet.blockCount} blocks)`;
+    flowSheet.appendChild(option);
+  }
+}
+
+function populateFlowBlocks() {
+  const current = flowBlock.value;
+  flowBlock.innerHTML = '<option value="">Select block…</option>';
+  for (const block of blocksOnSheet(flowSheet.value)) {
+    const option = document.createElement("option");
+    option.value = block.id;
+    option.textContent = cleanLabel(block.name || block.label, `${block.tag}#${block.id}`);
+    flowBlock.appendChild(option);
+  }
+  if (current && [...flowBlock.options].some((option) => option.value === current)) {
+    flowBlock.value = current;
+  }
+}
+
+function populateFlowPorts() {
+  const blockId = flowBlock.value;
+  const docId = flowSheet.value;
+  flowPort.innerHTML = '<option value="">All ports on this block</option>';
+  if (!blockId) return;
+  const ports = core().portsForBlock
+    ? core().portsForBlock(payload.wiring, blockId, docId)
+    : [];
+  for (const port of ports) {
+    const option = document.createElement("option");
+    option.value = port;
+    option.textContent = port;
+    flowPort.appendChild(option);
+  }
+  if (selectedPortName && ports.includes(selectedPortName)) {
+    flowPort.value = selectedPortName;
+  }
+}
+
+function renderEndpoint(endpoint, direction) {
+  const label = cleanLabel(endpoint.label, `${endpoint.tag || "Block"}#${endpoint.id}`);
+  return `
+    <button type="button" class="flow-endpoint" data-block-id="${escapeHtml(endpoint.id)}" data-port="${escapeHtml(endpoint.port || "")}" data-direction="${direction}">
+      <strong>${escapeHtml(label)}</strong>
+      <small>${escapeHtml(endpoint.sheet || "—")} · port <em>${escapeHtml(endpoint.port || "—")}</em></small>
+    </button>`;
+}
+
+function renderFlowChain(blockId, portName) {
+  const gfx = core();
+  if (!gfx.traceSignalChain) return "";
+  const steps = gfx.traceSignalChain(payload.wiring, blockId, portName, "down", 4);
+  if (!steps.length) return "";
+  const lines = steps.map((step) => {
+    const fromLabel = gfx.blockLabelFromGraph(payload.wiring, step.from.id);
+    const toLabel = gfx.blockLabelFromGraph(payload.wiring, step.to.id);
+    return `
+      <div class="flow-chain-step" style="margin-left:${step.depth * 18}px">
+        <span class="flow-chain-arrow">→</span>
+        <button type="button" class="flow-endpoint compact" data-block-id="${escapeHtml(step.to.id)}" data-port="${escapeHtml(step.to.port || "")}" data-direction="down">
+          <strong>${escapeHtml(cleanLabel(toLabel))}</strong>
+          <small>port ${escapeHtml(step.to.port || "—")} · ${escapeHtml(step.to.sheet || "—")}</small>
+        </button>
+        <span class="flow-chain-from">from ${escapeHtml(cleanLabel(fromLabel))} · ${escapeHtml(step.port || "—")}</span>
+      </div>`;
+  });
+  return `
+    <div class="flow-chain-block">
+      <h3>Then used at (downstream)</h3>
+      ${lines.join("")}
+    </div>`;
+}
+
+function renderSignalFlow(blockId, portName = "") {
+  if (!blockId) {
+    flowDiagram.hidden = true;
+    flowDiagram.innerHTML = "";
+    flowEmpty.hidden = false;
+    return;
+  }
+  flowEmpty.hidden = true;
+  flowDiagram.hidden = false;
+
+  const gfx = core();
+  const blockLabel = cleanLabel(
+    gfx.blockLabelFromGraph ? gfx.blockLabelFromGraph(payload.wiring, blockId) : blockId,
+    `Block#${blockId}`,
+  );
+  const flow = gfx.tracePortFlow ? gfx.tracePortFlow(payload.wiring, blockId, portName) : { inputs: [], outputs: [] };
+  const portLabel = portName ? ` · port <em>${escapeHtml(portName)}</em>` : "";
+
+  const inputRows = flow.inputs.length
+    ? flow.inputs.map((row) => `
+        <div class="flow-row">
+          ${renderEndpoint(row.from, "input")}
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node flow-node-target">
+            <strong>${escapeHtml(blockLabel)}</strong>
+            <small>input port <em>${escapeHtml(row.port || "—")}</em></small>
+          </div>
+        </div>`).join("")
+    : `<p class="flow-none">No wired inputs${portName ? ` on port ${escapeHtml(portName)}` : ""}.</p>`;
+
+  const outputRows = flow.outputs.length
+    ? flow.outputs.map((row) => `
+        <div class="flow-row">
+          <div class="flow-node flow-node-source">
+            <strong>${escapeHtml(blockLabel)}</strong>
+            <small>output port <em>${escapeHtml(row.port || "—")}</em></small>
+          </div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          ${renderEndpoint(row.to, "output")}
+        </div>`).join("")
+    : `<p class="flow-none">No wired outputs${portName ? ` on port ${escapeHtml(portName)}` : ""}.</p>`;
+
+  const chain = portName ? renderFlowChain(blockId, portName) : "";
+
+  flowDiagram.innerHTML = `
+    <h2>${escapeHtml(blockLabel)}${portLabel}</h2>
+    <p class="flow-hint">Follow wires on this sheet: inputs feed the block; outputs go to the next logic block or hardware.</p>
+    <div class="flow-columns">
+      <div class="flow-col">
+        <h3>Inputs — what feeds this</h3>
+        ${inputRows}
+      </div>
+      <div class="flow-col">
+        <h3>Outputs — what this controls</h3>
+        ${outputRows}
+      </div>
+    </div>
+    ${chain}`;
+}
+
+function renderDiagramFocus() {
+  if (!selectedBlockId || activeTab !== "diagram") {
+    diagramFocus.hidden = true;
+    diagramFocus.innerHTML = "";
+    return;
+  }
+  const gfx = core();
+  const blockLabel = cleanLabel(
+    gfx.blockLabelFromGraph ? gfx.blockLabelFromGraph(payload.wiring, selectedBlockId) : selectedBlockId,
+  );
+  const flow = gfx.tracePortFlow ? gfx.tracePortFlow(payload.wiring, selectedBlockId, selectedPortName) : { inputs: [], outputs: [] };
+  diagramFocus.hidden = false;
+  diagramFocus.innerHTML = `
+    <h2>Selected: ${escapeHtml(blockLabel)}${selectedPortName ? ` · ${escapeHtml(selectedPortName)}` : ""}</h2>
+    <p class="flow-hint">Click a block above, or use the <strong>Signal flow</strong> tab for the full trace. Outputs (${flow.outputs.length}) control other blocks; inputs (${flow.inputs.length}) come from other blocks.</p>
+    <button type="button" class="flow-open-btn" id="openFlowFromDiagram">Open full signal flow</button>`;
+}
+
+function handleFlowEndpointClick(event) {
+  const button = event.target.closest(".flow-endpoint");
+  if (!button) return;
+  const blockId = button.dataset.blockId || "";
+  const port = button.dataset.port || "";
+  if (!blockId) return;
+  const sheet = (payload.wiring.sheetDiagrams || []).find((entry) => entry.blocks.some((block) => block.id === blockId));
+  if (sheet) setFlowSelection(sheet.docId, blockId, port);
+  selectedBlockId = blockId;
+  selectedPortName = port;
+  setActiveTab("flow");
+  render();
+}
+
+function getCurrentSheetDiagram() {
+  const docId = diagramSheet.value;
+  if (!docId) return null;
+  return (payload.wiring.sheetDiagrams || []).find((sheet) => sheet.docId === docId) || null;
+}
+
+function blockMatchesHighlight(block, query) {
+  if (!query) return false;
+  const haystack = [block.label, block.name, block.tagName, block.tag].join(" ").toLowerCase();
+  return haystack.includes(query.toLowerCase());
+}
+
+function renderSheetDiagram() {
+  const sheet = getCurrentSheetDiagram();
+  const query = diagramSearch.value.trim();
+  if (!sheet) {
+    diagramCanvas.innerHTML = "";
+    diagramEmpty.hidden = false;
+    return;
+  }
+  diagramEmpty.hidden = true;
+
+  const pad = 48;
+  const b = sheet.bounds;
+  const viewW = b.maxX - b.minX + pad * 2;
+  const viewH = b.maxY - b.minY + pad * 2;
+  const offsetX = b.minX - pad;
+  const offsetY = b.minY - pad;
+  const blockById = Object.fromEntries(sheet.blocks.map((block) => [block.id, block]));
+
+  let linksSvg = "";
+  for (const link of sheet.links) {
+    const from = blockById[link.fromId];
+    const to = blockById[link.toId];
+    if (!from || !to) continue;
+    const x1 = from.x + from.w;
+    const y1 = from.cy;
+    const x2 = to.x;
+    const y2 = to.cy;
+    const mx = (x1 + x2) / 2;
+    const highlighted =
+      link.fromId === selectedBlockId ||
+      link.toId === selectedBlockId ||
+      blockMatchesHighlight(from, query) ||
+      blockMatchesHighlight(to, query) ||
+      (link.fromPort && link.fromPort.toLowerCase().includes(query.toLowerCase())) ||
+      (link.toPort && link.toPort.toLowerCase().includes(query.toLowerCase()));
+    linksSvg += `<path class="wire-link${highlighted ? " highlighted" : ""}" d="M${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" />`;
+  }
+
+  let blocksSvg = "";
+  for (const block of sheet.blocks) {
+    const colors = CATEGORY_COLORS[block.category] || CATEGORY_COLORS.logic;
+    const highlighted =
+      block.id === selectedBlockId ||
+      blockMatchesHighlight(block, query);
+    const title = cleanLabel(block.name || block.label, block.tag);
+    const subtitle = cleanLabel(block.tagName, block.tag.replace(/^Bacnet/, ""));
+    const fontSize = Math.min(12, Math.max(7, block.h / 3.2));
+    const showLabels = diagramShowLabels.checked || highlighted || !query;
+    const labelSvg = showLabels
+      ? `<text x="${block.x + 5}" y="${block.y + fontSize + 2}" font-size="${fontSize}" font-weight="600">${escapeHtml(title.slice(0, 28))}</text>
+         <text x="${block.x + 5}" y="${block.y + fontSize * 2 + 1}" font-size="${Math.max(6, fontSize - 1)}" fill="#444">${escapeHtml(subtitle.slice(0, 32))}</text>`
+      : "";
+    blocksSvg += `
+      <g class="diagram-block${highlighted ? " highlighted" : ""}" data-block-id="${escapeHtml(block.id)}" role="button" tabindex="0" style="cursor:pointer">
+        <rect x="${block.x}" y="${block.y}" width="${block.w}" height="${block.h}" rx="5"
+          fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="${highlighted ? 2.8 : 1.4}" />
+        ${labelSvg}
+      </g>`;
+  }
+
+  diagramCanvas.innerHTML = `
+    <div class="diagram-scroll" style="--diagram-scale:${diagramScale}">
+      <svg class="sheet-diagram" viewBox="${offsetX} ${offsetY} ${viewW} ${viewH}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeHtml(sheet.name)} block diagram">
+        <rect x="${offsetX}" y="${offsetY}" width="${viewW}" height="${viewH}" class="diagram-bg" />
+        <g class="wire-layer">${linksSvg}</g>
+        <g class="block-layer">${blocksSvg}</g>
+      </svg>
+    </div>`;
+  renderDiagramFocus();
+}
+
 function setActiveTab(tab) {
   activeTab = tab;
-  const isXref = tab === "xref";
-  tabCrossRef.classList.toggle("active", isXref);
-  tabWiring.classList.toggle("active", !isXref);
-  tabCrossRef.setAttribute("aria-selected", String(isXref));
-  tabWiring.setAttribute("aria-selected", String(!isXref));
-  crossRefPanel.hidden = !isXref;
-  wiringPanel.hidden = isXref;
+  tabFlow.classList.toggle("active", tab === "flow");
+  tabDiagram.classList.toggle("active", tab === "diagram");
+  tabCrossRef.classList.toggle("active", tab === "xref");
+  tabWiring.classList.toggle("active", tab === "wiring");
+  tabFlow.setAttribute("aria-selected", String(tab === "flow"));
+  tabDiagram.setAttribute("aria-selected", String(tab === "diagram"));
+  tabCrossRef.setAttribute("aria-selected", String(tab === "xref"));
+  tabWiring.setAttribute("aria-selected", String(tab === "wiring"));
+  flowPanel.hidden = tab !== "flow";
+  diagramPanel.hidden = tab !== "diagram";
+  crossRefPanel.hidden = tab !== "xref";
+  wiringPanel.hidden = tab !== "wiring";
   renderStats();
 }
 
 function renderStats() {
   const w = payload.wiring;
-  if (activeTab === "xref") {
+  if (activeTab === "flow") {
+    const blockId = flowBlock.value;
+    if (blockId) {
+      const flow = core().tracePortFlow ? core().tracePortFlow(payload.wiring, blockId, flowPort.value) : { inputs: [], outputs: [] };
+      wiringStats.textContent = `${flow.inputs.length} input wire(s) · ${flow.outputs.length} output wire(s) — click an output to follow further`;
+    } else {
+      wiringStats.textContent = `Select a sheet and block to trace inputs → block → outputs`;
+    }
+  } else if (activeTab === "diagram") {
+    const sheet = getCurrentSheetDiagram();
+    if (sheet) {
+      wiringStats.textContent = `${sheet.name} · ${sheet.blockCount} blocks · ${sheet.linkCount} wires on this sheet`;
+    } else {
+      wiringStats.textContent = `${w.sheetDiagramCount || 0} programming sheets available · pick one from the dropdown`;
+    }
+  } else if (activeTab === "xref") {
     const shown = getFilteredCrossRefs().length;
-    wiringStats.textContent = `Showing ${shown} of ${w.crossRefCount || 0} tags · ${w.hubCount || 0} hubs · ${w.targetCount || 0} targets across ${(w.sheets || []).length} sheets`;
+    wiringStats.textContent = `Showing ${shown} of ${w.crossRefCount || 0} tags · ${w.hubCount || 0} hubs · ${w.targetCount || 0} targets`;
   } else {
     const shown = getFilteredLinks().length;
     wiringStats.textContent = `Showing ${shown} of ${w.linkCount} local wire connections · ${w.compositeCount} logic modules`;
@@ -235,7 +570,11 @@ function renderStats() {
 }
 
 function render() {
-  if (activeTab === "xref") {
+  if (activeTab === "flow") {
+    renderSignalFlow(flowBlock.value, flowPort.value);
+  } else if (activeTab === "diagram") {
+    renderSheetDiagram();
+  } else if (activeTab === "xref") {
     renderCrossRefTable();
   } else {
     renderWiringTable();
@@ -243,7 +582,54 @@ function render() {
   renderStats();
 }
 
+function applyInitialFocus() {
+  const w = payload.wiring;
+  if (payload.focusBlockId || payload.focusPortName) {
+    let docId = payload.focusSheetDocId || "";
+    const blockId = payload.focusBlockId || "";
+    if (!docId && blockId) {
+      const sheet = (w.sheetDiagrams || []).find((entry) => entry.blocks.some((block) => block.id === blockId));
+      docId = sheet?.docId || "";
+    }
+    setFlowSelection(docId, blockId, payload.focusPortName || "");
+    setActiveTab("flow");
+    return;
+  }
+  if (payload.focusTagName) {
+    xrefSearch.value = payload.focusTagName;
+    diagramSearch.value = payload.focusTagName;
+    selectedXrefTag = payload.focusTagName;
+    const xref = (w.crossReferences || []).find((row) => row.tagName === payload.focusTagName);
+    const hub = xref?.hubs[0];
+    if (hub?.blockId) {
+      const sheet = getSheetDiagramByName(hub.sheet);
+      if (sheet) setFlowSelection(sheet.docId, hub.blockId, payload.focusTagName);
+      setActiveTab("flow");
+      return;
+    }
+    setActiveTab("xref");
+    return;
+  }
+  if (payload.focusSheetDocId) {
+    setFlowSelection(payload.focusSheetDocId, "", "");
+    diagramSheet.value = payload.focusSheetDocId;
+    setActiveTab("flow");
+    return;
+  }
+  if ((w.sheetDiagrams || []).length > 0) {
+    setFlowSelection(w.sheetDiagrams[0].docId, "", "");
+  }
+  setActiveTab("flow");
+}
+
 function populateFilters() {
+  populateFlowSheets();
+  for (const sheet of payload.wiring.sheetDiagrams || []) {
+    const option = document.createElement("option");
+    option.value = sheet.docId;
+    option.textContent = `${sheet.name} (${sheet.blockCount} blocks)`;
+    diagramSheet.appendChild(option);
+  }
   for (const sheet of payload.wiring.sheets || []) {
     const option = document.createElement("option");
     option.value = sheet;
@@ -265,18 +651,10 @@ function populateFilters() {
   for (const block of payload.wiring.focusOptions || []) {
     const option = document.createElement("option");
     option.value = block.id;
-    option.textContent = block.label;
+    option.textContent = cleanLabel(block.label, `Block#${block.id}`);
     focusBlock.appendChild(option);
   }
-  if (payload.focusTagName) {
-    xrefSearch.value = payload.focusTagName;
-    selectedXrefTag = payload.focusTagName;
-    setActiveTab("xref");
-  }
-  if (payload.focusBlockId) {
-    focusBlock.value = payload.focusBlockId;
-    setActiveTab("wiring");
-  }
+  applyInitialFocus();
 }
 
 function init() {
@@ -288,25 +666,99 @@ function init() {
   }
 
   const title = payload.projectName || payload.fileName || "GFX project";
-  document.title = `Cross-reference — ${title}`;
-  wiringSubtitle.textContent = `${title} · like EC-gfxProgram Reference Hub / Target`;
-  printTitle.textContent = `Logic cross-reference — ${title}`;
-  printMeta.textContent = `Exported ${new Date(payload.exportedAt).toLocaleString()} · ${payload.wiring.crossRefCount || 0} tags · ${payload.wiring.linkCount} wires`;
+  document.title = `Signal flow — ${title}`;
+  wiringSubtitle.textContent = `${title} · follow inputs → block → outputs (read-only)`;
+  printTitle.textContent = `Logic signal flow — ${title}`;
+  printMeta.textContent = `Exported ${new Date(payload.exportedAt).toLocaleString()} · ${payload.wiring.sheetDiagramCount || 0} sheets · ${payload.wiring.linkCount} wires`;
 
   populateFilters();
-  setActiveTab(payload.focusTagName ? "xref" : "xref");
   render();
 
-  tabCrossRef.addEventListener("click", () => setActiveTab("xref"));
-  tabWiring.addEventListener("click", () => setActiveTab("wiring"));
-  xrefSearch.addEventListener("input", render);
-  xrefSheetFilter.addEventListener("change", render);
+  tabFlow.addEventListener("click", () => {
+    setActiveTab("flow");
+    render();
+  });
+  tabDiagram.addEventListener("click", () => {
+    setActiveTab("diagram");
+    render();
+  });
+  tabCrossRef.addEventListener("click", () => {
+    setActiveTab("xref");
+    render();
+  });
+  tabWiring.addEventListener("click", () => {
+    setActiveTab("wiring");
+    render();
+  });
+  diagramSheet.addEventListener("change", () => {
+    selectedBlockId = "";
+    selectedPortName = "";
+    render();
+  });
+  diagramSearch.addEventListener("input", render);
+  diagramShowLabels.addEventListener("change", render);
+  diagramCanvas.addEventListener("click", (event) => {
+    const block = event.target.closest(".diagram-block");
+    if (!block) return;
+    selectedBlockId = block.dataset.blockId || "";
+    selectedPortName = "";
+    const sheet = getCurrentSheetDiagram();
+    if (sheet) setFlowSelection(sheet.docId, selectedBlockId, "");
+    render();
+  });
+  diagramFocus.addEventListener("click", (event) => {
+    if (event.target.closest("#openFlowFromDiagram")) {
+      setActiveTab("flow");
+      render();
+    }
+  });
+  flowSheet.addEventListener("change", () => {
+    flowBlock.value = "";
+    flowPort.value = "";
+    selectedBlockId = "";
+    selectedPortName = "";
+    populateFlowBlocks();
+    populateFlowPorts();
+    diagramSheet.value = flowSheet.value;
+    render();
+  });
+  flowBlock.addEventListener("change", () => {
+    selectedBlockId = flowBlock.value;
+    selectedPortName = "";
+    populateFlowPorts();
+    render();
+  });
+  flowPort.addEventListener("change", () => {
+    selectedPortName = flowPort.value;
+    render();
+  });
+  flowDiagram.addEventListener("click", handleFlowEndpointClick);
+  diagramCanvas.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    diagramScale = Math.min(2.5, Math.max(0.4, diagramScale + (event.deltaY < 0 ? 0.1 : -0.1)));
+    renderSheetDiagram();
+  }, { passive: false });
   xrefTableBody.addEventListener("click", (event) => {
     const row = event.target.closest(".xref-row");
     if (!row) return;
     selectedXrefTag = row.dataset.tag || "";
+    diagramSearch.value = selectedXrefTag;
+    const xref = (payload.wiring.crossReferences || []).find((entry) => entry.tagName === selectedXrefTag);
+    const sheetName = xref?.hubs[0]?.sheet || xref?.targets[0]?.sheet;
+    if (sheetName) {
+      const diagram = getSheetDiagramByName(sheetName);
+      if (diagram) {
+        const hub = xref?.hubs[0];
+        setFlowSelection(diagram.docId, hub?.blockId || "", selectedXrefTag);
+        setActiveTab("flow");
+      }
+    }
     renderCrossRefTable();
+    render();
   });
+  xrefSearch.addEventListener("input", render);
+  xrefSheetFilter.addEventListener("change", render);
   wireSearch.addEventListener("input", render);
   compositeFilter.addEventListener("change", render);
   tagFilter.addEventListener("change", render);

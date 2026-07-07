@@ -1,4 +1,4 @@
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.8.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -122,11 +122,13 @@ function renderParamHelpPanel(param) {
       ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View block wiring</button>`
       : "";
     const crossRefHelp = renderCrossRefHelp(param);
+    const signalHelp = renderSignalFlowHelp(param);
     editorHelp.innerHTML = `
       <h3>${escapeHtml(param.name)}</h3>
       <p class="help-label">${escapeHtml(label)}</p>
       ${feeds}
       ${extra}
+      ${signalHelp}
       ${crossRefHelp}
       ${wiringLink}
       <p class="help-path">No mapped description in param_help.json yet.</p>
@@ -146,6 +148,7 @@ function renderParamHelpPanel(param) {
     ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View block wiring</button>`
     : "";
   const crossRefHelp = renderCrossRefHelp(param);
+  const signalHelp = renderSignalFlowHelp(param);
   const docUrl = help.manualUrl || manualHome;
   editorHelp.innerHTML = `
     <h3>${escapeHtml(param.name)}</h3>
@@ -154,6 +157,7 @@ function renderParamHelpPanel(param) {
     ${feeds}
     ${hint}
     ${notesBlock}
+    ${signalHelp}
     ${crossRefHelp}
     ${wiringLink}
     <div class="help-links">
@@ -283,7 +287,12 @@ function renderParameterList() {
 
     const input = document.createElement("input");
     input.type = "text";
-    input.value = param.value;
+    const formattedValue = GfxCore.formatParameterValue(param.value);
+    input.value = formattedValue;
+    if (formattedValue !== param.value) {
+      input.title = param.value;
+      input.classList.add("param-value-summary");
+    }
 
     const resetBtn = document.createElement("button");
     resetBtn.type = "button";
@@ -426,7 +435,27 @@ function renderCrossRefHelp(param) {
     </div>`;
 }
 
-function openWiringViewer(focusBlockId = "", focusTagName = "") {
+function renderSignalFlowHelp(param) {
+  if (!appState.wiringGraph) return "";
+  const signal = GfxCore.resolveParamSignal(appState.wiringGraph, param);
+  if (!signal?.blockId) return "";
+  const flow = GfxCore.tracePortFlow(appState.wiringGraph, signal.blockId, signal.portName || "");
+  const inputSummary = flow.inputs.length
+    ? flow.inputs.map((row) => `${row.from.label} → ${row.port}`).slice(0, 3).join("; ")
+    : "none on this sheet";
+  const outputSummary = flow.outputs.length
+    ? flow.outputs.map((row) => `${row.port} → ${row.to.label}`).slice(0, 3).join("; ")
+    : "none on this sheet";
+  const portAttr = signal.portName ? ` data-port-name="${escapeHtml(signal.portName)}"` : "";
+  return `
+    <div class="help-signal-flow">
+      <p class="help-path"><strong>Inputs:</strong> ${escapeHtml(inputSummary)}</p>
+      <p class="help-path"><strong>Outputs:</strong> ${escapeHtml(outputSummary)}</p>
+      <button type="button" class="help-wiring-link" data-block-id="${escapeHtml(signal.blockId)}"${portAttr}>Trace signal flow</button>
+    </div>`;
+}
+
+function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortName = "") {
   if (!appState.wiringGraph) {
     log("Load a template first to view wiring.");
     return;
@@ -437,6 +466,7 @@ function openWiringViewer(focusBlockId = "", focusTagName = "") {
     exportedAt: new Date().toISOString(),
     focusBlockId: focusBlockId || "",
     focusTagName: focusTagName || "",
+    focusPortName: focusPortName || "",
     wiring: appState.wiringGraph,
   };
 
@@ -557,7 +587,7 @@ editorHelp.addEventListener("click", (event) => {
   }
   const btn = event.target.closest(".help-wiring-link[data-block-id]");
   if (!btn) return;
-  openWiringViewer(btn.dataset.blockId || "");
+  openWiringViewer(btn.dataset.blockId || "", "", btn.dataset.portName || "");
 });
 loadBtn.addEventListener("click", loadTemplate);
 
