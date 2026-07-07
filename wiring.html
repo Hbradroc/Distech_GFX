@@ -7,9 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="wiring.css?v=1.8.0" />
-    <script defer src="gfx-core.js?v=1.8.0"></script>
-    <script defer src="wiring.js?v=1.8.0"></script>
+    <link rel="stylesheet" href="wiring.css?v=1.8.2" />
+    <script defer src="gfx-core.js?v=1.8.2"></script>
+    <script defer src="wiring.js?v=1.8.2"></script>
   </head>
   <body>
     <header class="wiring-toolbar no-print">
@@ -61,16 +61,21 @@
           </select>
           <input type="search" id="diagramSearch" placeholder="Highlight tag or block name…" autocomplete="off" />
           <label class="wiring-toggle">
-            <input type="checkbox" id="diagramShowLabels" checked />
-            Show all labels
+            <input type="checkbox" id="diagramShowLabels" />
+            Show labels on small blocks
           </label>
         </div>
         <div class="diagram-legend no-print">
-          <span class="legend-item legend-reference">Reference</span>
+          <span class="legend-item legend-reference">Reference in / out</span>
           <span class="legend-item legend-bacnet">BACnet</span>
           <span class="legend-item legend-pid">PID / logic</span>
           <span class="legend-item legend-hwout">Hardware I/O</span>
         </div>
+        <p class="diagram-help no-print">
+          <strong>Reference in</strong> (green) reads a tag value from another sheet — e.g. <em>fan_supply</em>.
+          <strong>Reference out</strong> defines that tag on this sheet for others to use.
+          Logic blocks (purple) are switches, AND/OR, PID, etc.
+        </p>
         <div id="diagramCanvas" class="diagram-canvas" aria-label="EC-gfxProgram style block diagram"></div>
         <section id="diagramFocus" class="wiring-diagram diagram-focus no-print" hidden aria-label="Selected block signal flow"></section>
         <p id="diagramEmpty" class="wiring-empty" hidden>Select a programming sheet, then click a block to trace its inputs and outputs.</p>

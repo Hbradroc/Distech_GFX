@@ -254,6 +254,23 @@ button:active {
   margin-bottom: 12px;
 }
 
+.diagram-help {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.diagram-help em {
+  font-style: normal;
+  color: var(--ink);
+  font-weight: 500;
+}
+
 .diagram-legend {
   display: flex;
   flex-wrap: wrap;
@@ -348,10 +365,15 @@ button:active {
   filter: drop-shadow(0 0 4px rgba(15, 118, 110, 0.45));
 }
 
-.diagram-block text {
+.diagram-block text,
+.diagram-block-label {
   fill: var(--ink);
   pointer-events: none;
   user-select: none;
+}
+
+.diagram-block-label tspan {
+  dominant-baseline: alphabetic;
 }
 
 .flow-diagram h2 {

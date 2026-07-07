@@ -1,4 +1,4 @@
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.8.2";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";

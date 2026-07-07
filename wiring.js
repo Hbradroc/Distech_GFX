@@ -250,6 +250,119 @@ function cleanLabel(text, fallback = "") {
   return raw;
 }
 
+const GENERIC_BLOCK_NAMES = new Set([
+  "",
+  "Reference Target",
+  "Reference Hub",
+  "Reference In",
+  "Reference Out",
+  "Internal Constant",
+  "Monitor",
+]);
+
+function isGenericBlockName(name) {
+  const raw = String(name || "").trim();
+  return GENERIC_BLOCK_NAMES.has(raw) || raw.startsWith("LogicConstant#");
+}
+
+function friendlyBlockType(tag) {
+  const map = {
+    IncomingTag: "Reference in",
+    OutgoingTag: "Reference out",
+    InternalConstantNumeric: "Constant",
+    SimpleCompositeBlock: "Logic module",
+    And: "And",
+    Or: "Or",
+    Not: "Not",
+    Switch: "Switch",
+    Add: "Add",
+    Subtract: "Subtract",
+    Multiply: "Multiply",
+    Divide: "Divide",
+    LessThan: "Less than",
+    GreaterThan: "Greater than",
+    Equal: "Equal",
+    Hysteresis: "Hysteresis",
+    Ramp: "Ramp",
+    PID: "PID",
+    JPID: "JPID",
+  };
+  if (map[tag]) return map[tag];
+  if (tag.startsWith("Bacnet")) return tag.replace(/^Bacnet/, "BACnet ");
+  if (tag.includes("HardwareOutput")) return "Hardware output";
+  if (tag.includes("HardwareInput")) return "Hardware input";
+  if (tag.includes("Pid") || tag.includes("JPID")) return "PID";
+  return tag.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function blockDisplayLabels(block) {
+  const tag = block.tag || "";
+  const tagName = cleanLabel(block.tagName, "");
+  const name = cleanLabel(block.name, "");
+  const typeLabel = friendlyBlockType(tag);
+
+  if (tag === "IncomingTag") {
+    const title = tagName || (!isGenericBlockName(name) ? name : "Reference in");
+    return {
+      title,
+      subtitle: tagName ? "From another sheet" : "Reads a shared tag",
+      tooltip: tagName
+        ? `Reference in: uses the value of "${tagName}" defined elsewhere in the project`
+        : "Reference in block — reads a tag value from another programming sheet",
+    };
+  }
+
+  if (tag === "OutgoingTag") {
+    const title = tagName || (!isGenericBlockName(name) ? name : "Reference out");
+    return {
+      title,
+      subtitle: tagName ? "Defined on this sheet" : "Publishes a shared tag",
+      tooltip: tagName
+        ? `Reference out: defines "${tagName}" here for other sheets to read`
+        : "Reference out block — defines a tag other sheets can use",
+    };
+  }
+
+  if (tag === "InternalConstantNumeric") {
+    const title = !isGenericBlockName(name) ? name : `Constant #${block.id}`;
+    return {
+      title,
+      subtitle: "Fixed value",
+      tooltip: `Internal constant (${title}) wired into logic on this sheet`,
+    };
+  }
+
+  if (tag === "SimpleCompositeBlock") {
+    return {
+      title: name || `Module #${block.id}`,
+      subtitle: "Logic module",
+      tooltip: name ? `Composite logic module: ${name}` : `Logic module #${block.id}`,
+    };
+  }
+
+  if (tagName && (isGenericBlockName(name) || name === tag)) {
+    return {
+      title: tagName,
+      subtitle: typeLabel,
+      tooltip: `${tagName} · ${typeLabel}`,
+    };
+  }
+
+  if (!isGenericBlockName(name)) {
+    return {
+      title: name,
+      subtitle: name !== typeLabel ? typeLabel : "",
+      tooltip: `${name} · ${typeLabel}`,
+    };
+  }
+
+  return {
+    title: typeLabel || `${tag} #${block.id}`,
+    subtitle: "",
+    tooltip: `${typeLabel || tag} #${block.id}`,
+  };
+}
+
 function getSheetDiagramByDocId(docId) {
   return (payload.wiring.sheetDiagrams || []).find((sheet) => sheet.docId === docId) || null;
 }
@@ -290,7 +403,7 @@ function populateFlowBlocks() {
   for (const block of blocksOnSheet(flowSheet.value)) {
     const option = document.createElement("option");
     option.value = block.id;
-    option.textContent = cleanLabel(block.name || block.label, `${block.tag}#${block.id}`);
+    option.textContent = blockDisplayLabels(block).title;
     flowBlock.appendChild(option);
   }
   if (current && [...flowBlock.options].some((option) => option.value === current)) {
@@ -318,12 +431,37 @@ function populateFlowPorts() {
 }
 
 function renderEndpoint(endpoint, direction) {
-  const label = cleanLabel(endpoint.label, `${endpoint.tag || "Block"}#${endpoint.id}`);
+  const sheetBlock = (payload.wiring.sheetDiagrams || [])
+    .flatMap((sheet) => sheet.blocks)
+    .find((block) => block.id === endpoint.id);
+  const display = sheetBlock
+    ? blockDisplayLabels(sheetBlock)
+    : { title: cleanLabel(endpoint.label, endpoint.tag || "Block"), subtitle: "", tooltip: endpoint.label };
+  const label = display.title;
+  const hint = display.subtitle || friendlyBlockType(endpoint.tag || "");
   return `
     <button type="button" class="flow-endpoint" data-block-id="${escapeHtml(endpoint.id)}" data-port="${escapeHtml(endpoint.port || "")}" data-direction="${direction}">
       <strong>${escapeHtml(label)}</strong>
-      <small>${escapeHtml(endpoint.sheet || "—")} · port <em>${escapeHtml(endpoint.port || "—")}</em></small>
+      <small>${escapeHtml(endpoint.sheet || "—")}${hint ? ` · ${escapeHtml(hint)}` : ""}${endpoint.port ? ` · port <em>${escapeHtml(endpoint.port)}</em>` : ""}</small>
     </button>`;
+}
+
+function findDiagramBlock(blockId) {
+  for (const sheet of payload?.wiring?.sheetDiagrams || []) {
+    const block = sheet.blocks.find((entry) => entry.id === blockId);
+    if (block) return block;
+  }
+  return null;
+}
+
+function displayTitleForBlockId(blockId, fallback = "") {
+  const block = findDiagramBlock(blockId);
+  if (block) return blockDisplayLabels(block).title;
+  const gfx = core();
+  return cleanLabel(
+    gfx.blockLabelFromGraph ? gfx.blockLabelFromGraph(payload.wiring, blockId) : fallback || blockId,
+    fallback || `Block#${blockId}`,
+  );
 }
 
 function renderFlowChain(blockId, portName) {
@@ -332,16 +470,14 @@ function renderFlowChain(blockId, portName) {
   const steps = gfx.traceSignalChain(payload.wiring, blockId, portName, "down", 4);
   if (!steps.length) return "";
   const lines = steps.map((step) => {
-    const fromLabel = gfx.blockLabelFromGraph(payload.wiring, step.from.id);
-    const toLabel = gfx.blockLabelFromGraph(payload.wiring, step.to.id);
     return `
       <div class="flow-chain-step" style="margin-left:${step.depth * 18}px">
         <span class="flow-chain-arrow">→</span>
         <button type="button" class="flow-endpoint compact" data-block-id="${escapeHtml(step.to.id)}" data-port="${escapeHtml(step.to.port || "")}" data-direction="down">
-          <strong>${escapeHtml(cleanLabel(toLabel))}</strong>
+          <strong>${escapeHtml(displayTitleForBlockId(step.to.id))}</strong>
           <small>port ${escapeHtml(step.to.port || "—")} · ${escapeHtml(step.to.sheet || "—")}</small>
         </button>
-        <span class="flow-chain-from">from ${escapeHtml(cleanLabel(fromLabel))} · ${escapeHtml(step.port || "—")}</span>
+        <span class="flow-chain-from">from ${escapeHtml(displayTitleForBlockId(step.from.id))} · ${escapeHtml(step.port || "—")}</span>
       </div>`;
   });
   return `
@@ -361,11 +497,10 @@ function renderSignalFlow(blockId, portName = "") {
   flowEmpty.hidden = true;
   flowDiagram.hidden = false;
 
+  const blockLabel = displayTitleForBlockId(blockId);
+  const blockDisplay = findDiagramBlock(blockId);
+  const blockHint = blockDisplay ? blockDisplayLabels(blockDisplay).subtitle : "";
   const gfx = core();
-  const blockLabel = cleanLabel(
-    gfx.blockLabelFromGraph ? gfx.blockLabelFromGraph(payload.wiring, blockId) : blockId,
-    `Block#${blockId}`,
-  );
   const flow = gfx.tracePortFlow ? gfx.tracePortFlow(payload.wiring, blockId, portName) : { inputs: [], outputs: [] };
   const portLabel = portName ? ` · port <em>${escapeHtml(portName)}</em>` : "";
 
@@ -397,6 +532,7 @@ function renderSignalFlow(blockId, portName = "") {
 
   flowDiagram.innerHTML = `
     <h2>${escapeHtml(blockLabel)}${portLabel}</h2>
+    ${blockHint ? `<p class="flow-hint">${escapeHtml(blockHint)}</p>` : ""}
     <p class="flow-hint">Follow wires on this sheet: inputs feed the block; outputs go to the next logic block or hardware.</p>
     <div class="flow-columns">
       <div class="flow-col">
@@ -417,11 +553,10 @@ function renderDiagramFocus() {
     diagramFocus.innerHTML = "";
     return;
   }
-  const gfx = core();
-  const blockLabel = cleanLabel(
-    gfx.blockLabelFromGraph ? gfx.blockLabelFromGraph(payload.wiring, selectedBlockId) : selectedBlockId,
-  );
-  const flow = gfx.tracePortFlow ? gfx.tracePortFlow(payload.wiring, selectedBlockId, selectedPortName) : { inputs: [], outputs: [] };
+  const blockLabel = displayTitleForBlockId(selectedBlockId);
+  const flow = core().tracePortFlow
+    ? core().tracePortFlow(payload.wiring, selectedBlockId, selectedPortName)
+    : { inputs: [], outputs: [] };
   diagramFocus.hidden = false;
   diagramFocus.innerHTML = `
     <h2>Selected: ${escapeHtml(blockLabel)}${selectedPortName ? ` · ${escapeHtml(selectedPortName)}` : ""}</h2>
@@ -453,6 +588,83 @@ function blockMatchesHighlight(block, query) {
   if (!query) return false;
   const haystack = [block.label, block.name, block.tagName, block.tag].join(" ").toLowerCase();
   return haystack.includes(query.toLowerCase());
+}
+
+function estimateCharWidth(fontSize) {
+  return fontSize * 0.58;
+}
+
+function truncateToWidth(text, maxWidth, fontSize) {
+  const raw = String(text || "").trim();
+  if (!raw || maxWidth <= 0) return "";
+  const maxChars = Math.max(2, Math.floor(maxWidth / estimateCharWidth(fontSize)));
+  if (raw.length <= maxChars) return raw;
+  if (maxChars <= 1) return "…";
+  return `${raw.slice(0, maxChars - 1)}…`;
+}
+
+function blockLabelLines(block, display) {
+  const main = display.title;
+  let sub = display.subtitle;
+  if (!sub || sub === main) sub = "";
+  if (block.category === "reference" && main) return block.h < 30 ? [main] : sub ? [main, sub] : [main];
+  if (block.category === "composite" && main) return [main];
+  if (block.w < 52 || block.h < 22) return main ? [main] : [];
+  if (sub && block.h >= 32) return [main, sub];
+  return main ? [main] : [];
+}
+
+function buildBlockLabelSvg(block, display, showLabels) {
+  const pad = 5;
+  const innerW = Math.max(0, block.w - pad * 2);
+  const innerH = Math.max(0, block.h - pad * 2);
+  const tooltip = display.tooltip;
+  const lines = blockLabelLines(block, display);
+
+  if (!showLabels || !lines.length || innerW < 18 || innerH < 12) {
+    return `<title>${escapeHtml(tooltip)}</title>`;
+  }
+
+  const lineCount = lines.length;
+  const fontSize = Math.min(11, Math.max(6, Math.min(innerW / 8.5, innerH / (lineCount === 1 ? 2.2 : 3.4))));
+  const subFontSize = Math.max(5, fontSize - 1);
+  const lineGap = Math.max(subFontSize + 1, fontSize * 1.05);
+  const totalTextH = fontSize + (lineCount > 1 ? lineGap : 0);
+  const clipId = `clip-block-${block.id}`;
+  const centerX = block.x + block.w / 2;
+  const firstY = block.y + pad + (innerH - totalTextH) / 2 + fontSize * 0.78;
+
+  const tspans = lines
+    .map((line, index) => {
+      const isSub = index > 0;
+      const fs = isSub ? subFontSize : fontSize;
+      const text = truncateToWidth(line, innerW, fs);
+      if (!text) return "";
+      const dy = index === 0 ? 0 : lineGap;
+      const attrs = isSub ? ' fill="#4b5563"' : ' font-weight="600"';
+      return `<tspan x="${centerX}" dy="${dy}" font-size="${fs}"${attrs}>${escapeHtml(text)}</tspan>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  if (!tspans) {
+    return `<title>${escapeHtml(tooltip)}</title>`;
+  }
+
+  return `
+    <defs>
+      <clipPath id="${clipId}">
+        <rect x="${block.x + pad}" y="${block.y + pad}" width="${innerW}" height="${innerH}" rx="2" />
+      </clipPath>
+    </defs>
+    <title>${escapeHtml(tooltip)}</title>
+    <text
+      x="${centerX}"
+      y="${firstY}"
+      text-anchor="middle"
+      clip-path="url(#${clipId})"
+      class="diagram-block-label"
+    >${tspans}</text>`;
 }
 
 function renderSheetDiagram() {
@@ -499,14 +711,12 @@ function renderSheetDiagram() {
     const highlighted =
       block.id === selectedBlockId ||
       blockMatchesHighlight(block, query);
-    const title = cleanLabel(block.name || block.label, block.tag);
-    const subtitle = cleanLabel(block.tagName, block.tag.replace(/^Bacnet/, ""));
-    const fontSize = Math.min(12, Math.max(7, block.h / 3.2));
-    const showLabels = diagramShowLabels.checked || highlighted || !query;
-    const labelSvg = showLabels
-      ? `<text x="${block.x + 5}" y="${block.y + fontSize + 2}" font-size="${fontSize}" font-weight="600">${escapeHtml(title.slice(0, 28))}</text>
-         <text x="${block.x + 5}" y="${block.y + fontSize * 2 + 1}" font-size="${Math.max(6, fontSize - 1)}" fill="#444">${escapeHtml(subtitle.slice(0, 32))}</text>`
-      : "";
+    const display = blockDisplayLabels(block);
+    const showLabels =
+      highlighted ||
+      diagramShowLabels.checked ||
+      (!query && (block.w >= 64 && block.h >= 28));
+    const labelSvg = buildBlockLabelSvg(block, display, showLabels);
     blocksSvg += `
       <g class="diagram-block${highlighted ? " highlighted" : ""}" data-block-id="${escapeHtml(block.id)}" role="button" tabindex="0" style="cursor:pointer">
         <rect x="${block.x}" y="${block.y}" width="${block.w}" height="${block.h}" rx="5"
@@ -651,7 +861,7 @@ function populateFilters() {
   for (const block of payload.wiring.focusOptions || []) {
     const option = document.createElement("option");
     option.value = block.id;
-    option.textContent = cleanLabel(block.label, `Block#${block.id}`);
+    option.textContent = displayTitleForBlockId(block.id, `Block#${block.id}`);
     focusBlock.appendChild(option);
   }
   applyInitialFocus();
