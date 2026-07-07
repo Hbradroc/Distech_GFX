@@ -182,7 +182,89 @@ const GfxCore = (() => {
     return `${block.tag}#${blockId}`;
   }
 
-  function wiringEndpoint(blockIndex, blockId, port) {
+  function buildSheetMap(doc) {
+    const map = new Map();
+    for (const el of doc.getElementsByTagName("*")) {
+      const id = el.getAttribute("id");
+      if (!id) continue;
+      if (!["DrawingDocument", "SimpleCompositeBlock", "PageSetup"].includes(el.tagName)) continue;
+      const name = textContent(el, "Name");
+      if (name) map.set(id, name);
+    }
+    return map;
+  }
+
+  function resolveSheet(block, sheetMap) {
+    const docRef = block.getElementsByTagName("Doc")[0]?.getAttribute("ref");
+    if (docRef && sheetMap.has(docRef)) return sheetMap.get(docRef);
+    return docRef ? `Sheet #${docRef}` : "Unknown sheet";
+  }
+
+  function tagNameFromBlock(block) {
+    const props = block.getElementsByTagName("Props")[0];
+    const tagNameEl = props?.getElementsByTagName("TagName")[0];
+    return tagNameEl?.textContent?.trim() || "";
+  }
+
+  function buildBlockSheetMap(doc, sheetMap) {
+    const blockSheets = new Map();
+    for (const el of doc.getElementsByTagName("*")) {
+      const id = el.getAttribute("id");
+      if (!id || !el.getElementsByTagName("Doc")[0]) continue;
+      blockSheets.set(id, resolveSheet(el, sheetMap));
+    }
+    return blockSheets;
+  }
+
+  function parseCrossReferences(doc, sheetMap) {
+    const crossRefMap = new Map();
+
+    function addCrossRef(tagName, kind, entry) {
+      if (!tagName) return;
+      if (!crossRefMap.has(tagName)) {
+        crossRefMap.set(tagName, { tagName, hubs: [], targets: [] });
+      }
+      crossRefMap.get(tagName)[kind].push(entry);
+    }
+
+    for (const block of doc.getElementsByTagName("OutgoingTag")) {
+      const tagName = tagNameFromBlock(block);
+      addCrossRef(tagName, "hubs", {
+        blockId: block.getAttribute("id") || "",
+        sheet: resolveSheet(block, sheetMap),
+        role: textContent(block, "Name") || "Reference Hub",
+      });
+    }
+
+    for (const block of doc.getElementsByTagName("IncomingTag")) {
+      const tagName = tagNameFromBlock(block);
+      addCrossRef(tagName, "targets", {
+        blockId: block.getAttribute("id") || "",
+        sheet: resolveSheet(block, sheetMap),
+        role: textContent(block, "Name") || "Reference Target",
+      });
+    }
+
+    const crossReferences = [...crossRefMap.values()].sort((a, b) => a.tagName.localeCompare(b.tagName));
+    const crossRefByTag = {};
+    for (const entry of crossReferences) {
+      crossRefByTag[entry.tagName] = entry;
+    }
+    return { crossReferences, crossRefByTag };
+  }
+
+  function lookupCrossReference(wiringGraph, name) {
+    if (!wiringGraph?.crossRefByTag || !name) return null;
+    const candidates = [name];
+    if (name.includes(".")) candidates.push(name.split(".").pop());
+    if (name.includes("#")) candidates.push(name.split("#")[0]);
+    for (const candidate of candidates) {
+      if (wiringGraph.crossRefByTag[candidate]) return wiringGraph.crossRefByTag[candidate];
+    }
+    return null;
+  }
+
+  function wiringEndpoint(blockIndex, blockId, port, blockSheets) {
     const block = blockIndex.get(blockId);
     return {
       id: blockId,
@@ -190,12 +272,16 @@ const GfxCore = (() => {
       name: block?.name || "",
       label: wiringBlockLabel(blockIndex, blockId),
       port: port || "",
+      sheet: blockSheets?.get(blockId) || "",
     };
   }
 
   function parseWiringGraph(mainXmlText) {
     const doc = parseXml(mainXmlText);
     const blockIndex = buildBlockIndex(doc);
+    const sheetMap = buildSheetMap(doc);
+    const blockSheets = buildBlockSheetMap(doc, sheetMap);
+    const { crossReferences, crossRefByTag } = parseCrossReferences(doc, sheetMap);
     const composites = [];
     const blockTypes = new Set();
 
@@ -203,7 +289,7 @@ const GfxCore = (() => {
       if (block.tagName !== "SimpleCompositeBlock") continue;
       const id = block.getAttribute("id") || "";
       const name = textContent(block, "Name") || `Composite#${id}`;
-      composites.push({ id, name, label: `${name} (${id})` });
+      composites.push({ id, name, label: `${name} (${id})`, sheet: resolveSheet(block, sheetMap) });
     }
     composites.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -215,8 +301,8 @@ const GfxCore = (() => {
       const fromPort = textContent(link, "FP");
       const toPort = textContent(link, "TP");
       if (!fromId || !toId) continue;
-      const from = wiringEndpoint(blockIndex, fromId, fromPort);
-      const to = wiringEndpoint(blockIndex, toId, toPort);
+      const from = wiringEndpoint(blockIndex, fromId, fromPort, blockSheets);
+      const to = wiringEndpoint(blockIndex, toId, toPort, blockSheets);
       blockTypes.add(from.tag);
       blockTypes.add(to.tag);
       links.push({ id: linkId, from, to });
@@ -237,14 +323,22 @@ const GfxCore = (() => {
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
+    const sheets = [...new Set([...sheetMap.values(), ...blockSheets.values()])].sort();
+
     return {
       links,
       composites,
       focusOptions,
       blockTypes: [...blockTypes].sort(),
+      sheets,
+      crossReferences,
+      crossRefByTag,
       blockCount: blockIndex.size,
       linkCount: links.length,
       compositeCount: composites.length,
+      crossRefCount: crossReferences.length,
+      hubCount: crossReferences.reduce((sum, row) => sum + row.hubs.length, 0),
+      targetCount: crossReferences.reduce((sum, row) => sum + row.targets.length, 0),
     };
   }
 
@@ -388,11 +482,46 @@ const GfxCore = (() => {
     return match ? match.label : category;
   }
 
+  function normalizeXmlText(text) {
+    let normalized = String(text).replace(/^\uFEFF/, "");
+    if (/encoding=["']utf-16["']/i.test(normalized.slice(0, 160))) {
+      normalized = normalized.replace(/encoding=["']utf-16["']/i, 'encoding="utf-8"');
+    }
+    return normalized;
+  }
+
+  function decodeUtf16Le(bytes) {
+    let out = "";
+    for (let i = 0; i + 1 < bytes.length; i += 2) {
+      out += String.fromCharCode(bytes[i] | (bytes[i + 1] << 8));
+    }
+    return out;
+  }
+
+  function decodeXmlBytes(bytes) {
+    if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return normalizeXmlText(decodeUtf16Le(bytes.subarray(2)));
+    }
+    if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      return normalizeXmlText(new TextDecoder("utf-8").decode(bytes.subarray(3)));
+    }
+    return normalizeXmlText(new TextDecoder("utf-8").decode(bytes));
+  }
+
+  async function readZipXmlText(zip, path) {
+    const file = zip.file(path);
+    if (!file) return null;
+    const bytes = await file.async("uint8array");
+    return decodeXmlBytes(bytes);
+  }
+
   function parseXml(text) {
-    const doc = new DOMParser().parseFromString(text, "application/xml");
+    const normalized = normalizeXmlText(text);
+    const doc = new DOMParser().parseFromString(normalized, "application/xml");
     const parseError = doc.getElementsByTagName("parsererror")[0];
     if (parseError) {
-      throw new Error("XML could not be parsed.");
+      const detail = parseError.textContent?.trim().replace(/\s+/g, " ").slice(0, 180);
+      throw new Error(detail ? `XML parse error: ${detail}` : "XML could not be parsed.");
     }
     return doc;
   }
@@ -1040,40 +1169,39 @@ const GfxCore = (() => {
 
   async function loadGfxArchive(arrayBuffer) {
     const zip = await JSZip.loadAsync(arrayBuffer);
-    const mainFile = zip.file("Main.xml");
-    if (!mainFile) {
+    const mainXmlText = await readZipXmlText(zip, "Main.xml");
+    if (!mainXmlText) {
       throw new Error("Main.xml not found inside .gfx archive.");
     }
-
-    const mainXmlText = await mainFile.async("string");
-    const comFile = zip.file(COM_CONFIG_PATH);
-    const comConfigText = comFile ? await comFile.async("string") : null;
+    const comConfigText = await readZipXmlText(zip, COM_CONFIG_PATH);
 
     const scheduleFiles = {};
     const bindingFiles = {};
     for (const path of Object.keys(zip.files)) {
       if (path.startsWith("Config/Bacnet/Schedules/") && path.endsWith(".xml")) {
-        const text = await zip.file(path).async("string");
-        scheduleFiles[path] = { text, encoding: detectXmlEncoding(text) };
+        const text = await readZipXmlText(zip, path);
+        if (text) scheduleFiles[path] = { text, encoding: detectXmlEncoding(text) };
       }
       if (path.startsWith("Config/Bacnet/ComSensors/") && /Bindings.*\.xml$/i.test(path)) {
-        const text = await zip.file(path).async("string");
-        bindingFiles[path] = { text, encoding: detectXmlEncoding(text) };
+        const text = await readZipXmlText(zip, path);
+        if (text) bindingFiles[path] = { text, encoding: detectXmlEncoding(text) };
       }
     }
 
-    const internalPointsFile = zip.file(INTERNAL_POINTS_PATH);
-    const internalPointsText = internalPointsFile ? await internalPointsFile.async("string") : null;
+    const internalPointsText = await readZipXmlText(zip, INTERNAL_POINTS_PATH);
 
     const parameters = parseAllParameters(mainXmlText, comConfigText, scheduleFiles, bindingFiles, internalPointsText);
     const wiringGraph = parseWiringGraph(mainXmlText);
 
     let projectName = "";
-    const infoFile = zip.file("Info/ProjectInfo.xml");
-    if (infoFile) {
-      const infoText = await infoFile.async("string");
-      const infoDoc = parseXml(infoText);
-      projectName = textContent(infoDoc.documentElement, "Name");
+    const infoText = await readZipXmlText(zip, "Info/ProjectInfo.xml");
+    if (infoText) {
+      try {
+        const infoDoc = parseXml(infoText);
+        projectName = textContent(infoDoc.documentElement, "Name");
+      } catch {
+        projectName = "";
+      }
     }
 
     return {
@@ -1180,6 +1308,7 @@ const GfxCore = (() => {
     sectionForCategory,
     parseAllParameters,
     parseWiringGraph,
+    lookupCrossReference,
     parametersToUpdates,
     cloneParameters,
     loadGfxArchive,

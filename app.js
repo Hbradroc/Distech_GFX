@@ -1,4 +1,4 @@
-const APP_VERSION = "1.5.1";
+const APP_VERSION = "1.6.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -119,13 +119,15 @@ function renderParamHelpPanel(param) {
     const feeds = param.context ? `<p class="help-path"><strong>Connected to:</strong> ${escapeHtml(param.context)}</p>` : "";
     const blockId = blockIdFromParam(param);
     const wiringLink = blockId
-      ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View in wiring diagram</button>`
+      ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View block wiring</button>`
       : "";
+    const crossRefHelp = renderCrossRefHelp(param);
     editorHelp.innerHTML = `
       <h3>${escapeHtml(param.name)}</h3>
       <p class="help-label">${escapeHtml(label)}</p>
       ${feeds}
       ${extra}
+      ${crossRefHelp}
       ${wiringLink}
       <p class="help-path">No mapped description in param_help.json yet.</p>
       <div class="help-links">
@@ -141,8 +143,9 @@ function renderParamHelpPanel(param) {
   const hint = param.hint ? `<p class="help-path">${escapeHtml(param.hint)}</p>` : "";
   const blockId = blockIdFromParam(param);
   const wiringLink = blockId
-    ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View in wiring diagram</button>`
+    ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View block wiring</button>`
     : "";
+  const crossRefHelp = renderCrossRefHelp(param);
   const docUrl = help.manualUrl || manualHome;
   editorHelp.innerHTML = `
     <h3>${escapeHtml(param.name)}</h3>
@@ -151,6 +154,7 @@ function renderParamHelpPanel(param) {
     ${feeds}
     ${hint}
     ${notesBlock}
+    ${crossRefHelp}
     ${wiringLink}
     <div class="help-links">
       <a href="${docUrl}" target="_blank" rel="noopener noreferrer">Open Distech documentation</a>
@@ -409,7 +413,20 @@ function exportCsv() {
   log(`Exported ${appState.parameters.length} parameters to CSV.`);
 }
 
-function openWiringViewer(focusBlockId = "") {
+function renderCrossRefHelp(param) {
+  const crossRef = GfxCore.lookupCrossReference(appState.wiringGraph, param.name);
+  if (!crossRef) return "";
+  const hubs = crossRef.hubs.map((hub) => hub.sheet).join(", ") || "—";
+  const targets = crossRef.targets.map((target) => target.sheet).join(", ") || "—";
+  return `
+    <div class="help-crossref">
+      <p class="help-path"><strong>Defined on:</strong> ${escapeHtml(hubs)}</p>
+      <p class="help-path"><strong>Used on:</strong> ${escapeHtml(targets)}</p>
+      <button type="button" class="help-wiring-link" data-tag-name="${escapeHtml(crossRef.tagName)}">Open cross-reference viewer</button>
+    </div>`;
+}
+
+function openWiringViewer(focusBlockId = "", focusTagName = "") {
   if (!appState.wiringGraph) {
     log("Load a template first to view wiring.");
     return;
@@ -419,6 +436,7 @@ function openWiringViewer(focusBlockId = "") {
     fileName: appState.fileName,
     exportedAt: new Date().toISOString(),
     focusBlockId: focusBlockId || "",
+    focusTagName: focusTagName || "",
     wiring: appState.wiringGraph,
   };
 
@@ -497,7 +515,7 @@ async function loadTemplate() {
     if (openWiringBtn) openWiringBtn.disabled = false;
     if (wiringLaunch) wiringLaunch.hidden = false;
     if (wiringLaunchText && archive.wiringGraph) {
-      wiringLaunchText.textContent = `${archive.wiringGraph.linkCount} connections · ${archive.wiringGraph.compositeCount} modules`;
+      wiringLaunchText.textContent = `${archive.wiringGraph.crossRefCount || 0} tags · ${archive.wiringGraph.linkCount} wires`;
     }
 
     renderParameterList();
@@ -516,7 +534,7 @@ async function loadTemplate() {
         if (counts[category]) log(`    - ${category}: ${counts[category]}`);
       });
     });
-    log(`Wiring: ${archive.wiringGraph.linkCount} connections — click Open wiring viewer to inspect or print.`);
+    log(`Logic: ${archive.wiringGraph.crossRefCount || 0} cross-reference tags, ${archive.wiringGraph.linkCount} wire connections.`);
     log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {
     log(`Error: ${error.message}`);
@@ -532,7 +550,12 @@ generateBtnInline.addEventListener("click", generateGfx);
 exportCsvBtn.addEventListener("click", exportCsv);
 if (openWiringBtn) openWiringBtn.addEventListener("click", () => openWiringViewer());
 editorHelp.addEventListener("click", (event) => {
-  const btn = event.target.closest(".help-wiring-link");
+  const tagBtn = event.target.closest("[data-tag-name]");
+  if (tagBtn?.dataset.tagName) {
+    openWiringViewer("", tagBtn.dataset.tagName);
+    return;
+  }
+  const btn = event.target.closest(".help-wiring-link[data-block-id]");
   if (!btn) return;
   openWiringViewer(btn.dataset.blockId || "");
 });

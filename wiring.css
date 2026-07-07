@@ -225,6 +225,59 @@ button:active {
   color: var(--muted);
 }
 
+.wiring-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.wiring-tab {
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.wiring-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.wiring-panel[hidden] {
+  display: none !important;
+}
+
+.xref-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.xref-focus-grid h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.xref-focus-grid ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.xref-row {
+  cursor: pointer;
+}
+
+.xref-row.selected td {
+  background: #dff5f1;
+}
+
+.xref-row:hover td {
+  background: #f3faf8;
+}
+
 .wiring-print-banner {
   display: none;
   padding: 0 24px 8px;

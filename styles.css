@@ -273,7 +273,10 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.help-wiring-link {
+.help-crossref {
+  margin-top: 8px;
+}
+
   margin: 12px 0 0;
   padding: 8px 12px;
   font: inherit;
