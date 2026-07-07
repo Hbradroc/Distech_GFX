@@ -23,10 +23,10 @@ body {
 }
 
 .shell {
-  min-height: 100vh;
+  min-height: auto;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 24px 24px 12px;
   position: relative;
 }
 
@@ -219,65 +219,67 @@ button:disabled {
 }
 
 .footer-note {
-  position: fixed;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
-  margin: 0;
+  margin: 0 auto 24px;
+  text-align: center;
   font-size: 0.78rem;
   font-style: italic;
   color: rgba(22, 22, 22, 0.72);
-  pointer-events: none;
 }
 
-.editor-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(22, 22, 22, 0.45);
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  z-index: 100;
+.parameter-section {
+  width: min(1100px, 100%);
+  margin: 0 auto 32px;
+  padding: 0 24px;
 }
 
-.editor-backdrop[hidden] {
+.parameter-section[hidden] {
   display: none !important;
 }
 
-.editor-panel {
-  width: min(920px, 100%);
-  max-height: min(90vh, 900px);
+.parameter-card {
   background: var(--card);
   border: 2px solid var(--ink);
-  border-radius: 16px;
-  box-shadow: 10px 10px 0 var(--ink);
-  display: flex;
-  flex-direction: column;
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 var(--ink);
   overflow: hidden;
 }
 
-.editor-header {
+.parameter-header {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 18px;
+  gap: 12px;
+  padding: 20px 22px 12px;
   border-bottom: 1px solid var(--line);
 }
 
-.editor-header h2 {
+.parameter-header h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.25rem;
 }
 
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 8px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 1.4rem;
-  line-height: 1;
+.parameter-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  color: rgba(22, 22, 22, 0.72);
+  word-break: break-word;
+}
+
+.parameter-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.generate-inline {
+  background: var(--accent);
+  color: #fff;
+}
+
+.parameter-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
 }
 
 .editor-toolbar {
@@ -324,19 +326,11 @@ button:disabled {
   color: rgba(22, 22, 22, 0.75);
 }
 
-.editor-body {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .editor-list {
-  flex: 1 1 auto;
-  min-height: 220px;
+  min-height: 360px;
+  max-height: 62vh;
   overflow: auto;
-  padding: 8px 18px 12px;
+  padding: 8px 22px 12px;
   margin-top: 4px;
   border-bottom: 1px solid var(--line);
 }
@@ -366,6 +360,17 @@ button:disabled {
   word-break: break-all;
   line-height: 1.3;
   cursor: pointer;
+  display: grid;
+  gap: 2px;
+}
+
+.param-key strong {
+  font-size: 0.86rem;
+}
+
+.param-key span {
+  color: rgba(22, 22, 22, 0.62);
+  font-size: 0.74rem;
 }
 
 .param-row input {
@@ -453,14 +458,6 @@ button:disabled {
   margin-top: 12px;
 }
 
-.editor-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 18px;
-  border-top: 1px solid var(--line);
-}
-
 @media (max-width: 640px) {
   .card {
     padding: 18px;
@@ -475,8 +472,13 @@ button:disabled {
     max-height: 220px;
   }
 
-  .card-top-actions {
+  .card-top-actions,
+  .parameter-header {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .parameter-section {
+    padding: 0 12px;
   }
 }

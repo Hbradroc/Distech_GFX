@@ -11,11 +11,10 @@ Live site (after GitHub Pages is enabled): `https://hbradroc.github.io/Distech_G
 ### Use in the browser
 
 1. Open the web app.
-2. Upload an EC-gfxProgram `.gfx` file.
-3. Click **Load parameters**.
-4. Open **Admin → Edit parameters** to change setpoints.
-5. Click **Download .gfx**.
-6. Import the modified file in **EC-gfxProgram** and verify before downloading to a controller.
+2. Upload an EC-gfxProgram `.gfx` **template** file (loads automatically).
+3. All parameters are listed on the page — edit any values you need.
+4. Click **Generate .gfx** to write your values into the template and download the updated file.
+5. Import the generated file in **EC-gfxProgram** and verify before downloading to a controller.
 
 ### Run locally
 

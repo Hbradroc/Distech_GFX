@@ -1,24 +1,20 @@
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 
 const gfxInput = document.getElementById("gfxFile");
 const loadBtn = document.getElementById("loadBtn");
-const downloadBtn = document.getElementById("downloadBtn");
+const generateBtn = document.getElementById("generateBtn");
+const generateBtnInline = document.getElementById("generateBtnInline");
+const exportCsvBtn = document.getElementById("exportCsvBtn");
 const readyHint = document.getElementById("readyHint");
 const logEl = document.getElementById("log");
-
-const adminMenuBtn = document.getElementById("adminMenuBtn");
-const adminDropdown = document.getElementById("adminDropdown");
-const openEditorBtn = document.getElementById("openEditorBtn");
-const exportCsvBtn = document.getElementById("exportCsvBtn");
-const editorBackdrop = document.getElementById("editorBackdrop");
-const closeEditorBtn = document.getElementById("closeEditorBtn");
-const editorCloseFooterBtn = document.getElementById("editorCloseFooterBtn");
-const editorDownloadBtn = document.getElementById("editorDownloadBtn");
+const parameterSection = document.getElementById("parameterSection");
+const parameterTitle = document.getElementById("parameterTitle");
+const parameterSubtitle = document.getElementById("parameterSubtitle");
 const paramSearch = document.getElementById("paramSearch");
 const categoryFilter = document.getElementById("categoryFilter");
-const showAllParams = document.getElementById("showAllParams");
+const changedOnly = document.getElementById("changedOnly");
 const editorList = document.getElementById("editorList");
 const editorMeta = document.getElementById("editorMeta");
 const editorHelp = document.getElementById("editorHelp");
@@ -56,16 +52,6 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function defaultCategories() {
-  return [...document.querySelectorAll('input[name="defaultCategories"]:checked')].map(
-    (el) => el.value,
-  );
-}
-
-function isDefaultCategory(category) {
-  return defaultCategories().includes(category);
-}
-
 function resetState() {
   appState.fileName = "";
   appState.projectName = "";
@@ -73,9 +59,13 @@ function resetState() {
   appState.parameters = [];
   appState.originalSnapshot = new Map();
   appState.manualEdits = new Set();
-  adminMenuBtn.disabled = true;
-  downloadBtn.disabled = true;
+  generateBtn.disabled = true;
+  exportCsvBtn.disabled = true;
   readyHint.hidden = true;
+  parameterSection.hidden = true;
+  editorList.innerHTML = "";
+  editorHelp.innerHTML =
+    '<p class="editor-help-placeholder">Click a parameter or <strong>Info</strong> for EC-gfxProgram notes.</p>';
 }
 
 function snapshotParameters(parameters) {
@@ -175,16 +165,17 @@ function populateCategoryFilter() {
   });
 }
 
-function getEditorRows() {
+function getVisibleParameters() {
   const query = paramSearch.value.trim().toLowerCase();
   const category = categoryFilter.value;
-  const showAll = showAllParams.checked;
+  const onlyChanged = changedOnly.checked;
 
   return appState.parameters.filter((param) => {
-    if (!showAll && !isDefaultCategory(param.category)) return false;
+    const key = GfxCore.paramKey(param.source, param.category, param.name, param.field);
+    if (onlyChanged && !appState.manualEdits.has(key)) return false;
     if (category && param.category !== category) return false;
     if (!query) return true;
-    const haystack = `${param.name} ${param.category} ${param.field}`.toLowerCase();
+    const haystack = `${param.name} ${param.category} ${param.field} ${param.value}`.toLowerCase();
     if (haystack.includes(query)) return true;
     const help = lookupParamHelp(param);
     return Boolean(help?.label && help.label.toLowerCase().includes(query));
@@ -193,38 +184,30 @@ function getEditorRows() {
 
 function updateEditorMeta(count) {
   const manual = appState.manualEdits.size;
-  editorMeta.textContent = `Showing ${count} parameter${count === 1 ? "" : "s"} · ${appState.parameters.length} total · ${manual} manual edit${manual === 1 ? "" : "s"}`;
+  editorMeta.textContent = `Showing ${count} of ${appState.parameters.length} parameters · ${manual} changed`;
 }
 
-function renderEditorList() {
-  const rows = getEditorRows();
+function renderParameterList() {
+  const rows = getVisibleParameters();
   editorList.innerHTML = "";
 
   if (!rows.length) {
     const empty = document.createElement("div");
     empty.className = "editor-empty";
     const msg = document.createElement("p");
-    msg.textContent = paramSearch.value.trim()
-      ? "No parameters match your search."
-      : "No parameters in this view. Try Show all parameters.";
+    msg.textContent = changedOnly.checked
+      ? "No changed parameters yet. Edit a value above."
+      : paramSearch.value.trim()
+        ? "No parameters match your search."
+        : "No parameters found in this template.";
     empty.appendChild(msg);
-    if (!showAllParams.checked) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = "Show all parameters";
-      btn.addEventListener("click", () => {
-        showAllParams.checked = true;
-        renderEditorList();
-      });
-      empty.appendChild(btn);
-    }
     editorList.appendChild(empty);
     updateEditorMeta(0);
     return;
   }
 
   const fragment = document.createDocumentFragment();
-  const limit = 500;
+  const limit = 600;
   const visible = rows.slice(0, limit);
 
   visible.forEach((param) => {
@@ -234,8 +217,8 @@ function renderEditorList() {
 
     const keyEl = document.createElement("div");
     keyEl.className = "param-key";
-    keyEl.textContent = `${param.name} (${param.field})`;
-    keyEl.title = `${param.category} · ${param.source}`;
+    keyEl.innerHTML = `<strong>${escapeHtml(param.name)}</strong><span>${escapeHtml(param.category)} · ${escapeHtml(param.field)}</span>`;
+    keyEl.title = param.source;
 
     const input = document.createElement("input");
     input.type = "text";
@@ -244,7 +227,7 @@ function renderEditorList() {
     input.addEventListener("change", () => {
       setParameterValue(key, input.value);
       row.classList.toggle("manual-edit", appState.manualEdits.has(key));
-      updateEditorMeta(getEditorRows().length);
+      updateEditorMeta(getVisibleParameters().length);
     });
 
     const infoBtn = document.createElement("button");
@@ -257,13 +240,15 @@ function renderEditorList() {
     resetBtn.type = "button";
     resetBtn.className = "param-reset";
     resetBtn.textContent = "Reset";
+    resetBtn.disabled = !appState.manualEdits.has(key);
     resetBtn.addEventListener("click", () => {
       const original = appState.originalSnapshot.get(key);
       if (original === undefined) return;
       setParameterValue(key, original);
       input.value = original;
       row.classList.toggle("manual-edit", appState.manualEdits.has(key));
-      updateEditorMeta(getEditorRows().length);
+      resetBtn.disabled = !appState.manualEdits.has(key);
+      updateEditorMeta(getVisibleParameters().length);
     });
 
     keyEl.addEventListener("click", () => selectParamRow(row, param));
@@ -290,49 +275,14 @@ function scheduleEditorRender() {
   editorRenderScheduled = true;
   requestAnimationFrame(() => {
     editorRenderScheduled = false;
-    renderEditorList();
+    renderParameterList();
   });
 }
 
-async function openEditor() {
-  if (!appState.archive) {
-    log("Load a .gfx file first.");
-    return;
-  }
-  await loadParamHelp();
-  paramSearch.value = "";
-  categoryFilter.value = "";
-  showAllParams.checked = false;
-  editorHelp.innerHTML =
-    '<p class="editor-help-placeholder">Click a parameter or <strong>Info</strong> for EC-gfxProgram notes.</p>';
-  editorBackdrop.hidden = false;
-  editorBackdrop.removeAttribute("aria-hidden");
-  document.body.style.overflow = "hidden";
-  renderEditorList();
-  paramSearch.focus();
-}
-
-function closeEditor() {
-  editorBackdrop.hidden = true;
-  editorBackdrop.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
-  closeAdminDropdown();
-}
-
-function openAdminDropdown() {
-  adminDropdown.hidden = false;
-  adminMenuBtn.setAttribute("aria-expanded", "true");
-}
-
-function closeAdminDropdown() {
-  adminDropdown.hidden = true;
-  adminMenuBtn.setAttribute("aria-expanded", "false");
-}
-
 function outputFileName() {
-  if (!appState.fileName) return "modified.gfx";
+  if (!appState.fileName) return "generated.gfx";
   const stem = appState.fileName.replace(/\.gfx$/i, "");
-  return `${stem}_modified.gfx`;
+  return `${stem}_generated.gfx`;
 }
 
 function downloadBlob(blob, filename) {
@@ -346,35 +296,50 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-async function triggerDownload() {
+function setGenerating(isGenerating) {
+  loadBtn.disabled = isGenerating;
+  generateBtn.disabled = isGenerating || !appState.archive;
+  generateBtnInline.disabled = isGenerating || !appState.archive;
+  exportCsvBtn.disabled = isGenerating || !appState.archive;
+  generateBtn.textContent = isGenerating ? "Generating…" : "Generate .gfx";
+  generateBtnInline.textContent = isGenerating ? "Generating…" : "Generate .gfx";
+}
+
+async function generateGfx() {
   if (!appState.archive) {
-    log("Nothing to download. Load a .gfx file first.");
+    log("Load a template .gfx file first.");
     return;
   }
 
-  loadBtn.disabled = true;
-  downloadBtn.disabled = true;
+  clearLog();
+  setGenerating(true);
   try {
     const { blob, changed } = await GfxCore.buildModifiedGfx(appState.archive, appState.parameters);
     const filename = outputFileName();
     downloadBlob(blob, filename);
-    log(`Downloaded ${filename} (${changed.length} XML change${changed.length === 1 ? "" : "s"}).`);
+
+    log(`Generated ${filename}`);
+    log(`Template: ${appState.fileName}`);
+    if (appState.projectName) log(`Project: ${appState.projectName}`);
+    log(`Total parameters: ${appState.parameters.length}`);
+    log(`Values written: ${changed.length}`);
     if (changed.length) {
-      changed.slice(0, 25).forEach((line) => log(`  - ${line}`));
-      if (changed.length > 25) log(`  - ... and ${changed.length - 25} more`);
+      changed.slice(0, 30).forEach((line) => log(`  - ${line}`));
+      if (changed.length > 30) log(`  - ... and ${changed.length - 30} more`);
+    } else {
+      log("No values were changed from the template defaults.");
     }
-    log("Import the file in EC-gfxProgram and verify before downloading to a controller.");
+    log("Import the generated file in EC-gfxProgram and verify before downloading to a controller.");
   } catch (error) {
     log(`Error: ${error.message}`);
   } finally {
-    loadBtn.disabled = false;
-    downloadBtn.disabled = false;
+    setGenerating(false);
   }
 }
 
 function exportCsv() {
   if (!appState.parameters.length) {
-    log("Load a .gfx file first.");
+    log("Load a template first.");
     return;
   }
   const csv = GfxCore.parametersToCsv(appState.parameters);
@@ -382,62 +347,19 @@ function exportCsv() {
   const stem = appState.fileName ? appState.fileName.replace(/\.gfx$/i, "") : "parameters";
   downloadBlob(blob, `${stem}_parameters.csv`);
   log(`Exported ${appState.parameters.length} parameters to CSV.`);
-  closeAdminDropdown();
 }
 
-document.getElementById("adminMenu").addEventListener("click", (e) => e.stopPropagation());
-
-adminMenuBtn.addEventListener("click", () => {
-  if (adminMenuBtn.disabled) return;
-  if (adminDropdown.hidden) openAdminDropdown();
-  else closeAdminDropdown();
-});
-
-openEditorBtn.addEventListener("click", () => {
-  closeAdminDropdown();
-  openEditor();
-});
-
-exportCsvBtn.addEventListener("click", exportCsv);
-closeEditorBtn.addEventListener("click", closeEditor);
-editorCloseFooterBtn.addEventListener("click", closeEditor);
-editorDownloadBtn.addEventListener("click", async () => {
-  await triggerDownload();
-  closeEditor();
-});
-
-downloadBtn.addEventListener("click", triggerDownload);
-
-document.querySelector(".editor-panel")?.addEventListener("click", (e) => e.stopPropagation());
-editorBackdrop.addEventListener("click", (e) => {
-  if (e.target === editorBackdrop) closeEditor();
-});
-document.addEventListener("click", () => closeAdminDropdown());
-
-paramSearch.addEventListener("input", scheduleEditorRender);
-categoryFilter.addEventListener("change", scheduleEditorRender);
-showAllParams.addEventListener("change", scheduleEditorRender);
-document.querySelectorAll('input[name="defaultCategories"]').forEach((el) => {
-  el.addEventListener("change", () => {
-    if (!editorBackdrop.hidden) scheduleEditorRender();
-  });
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !editorBackdrop.hidden) closeEditor();
-});
-
-gfxInput.addEventListener("change", resetState);
-
-loadBtn.addEventListener("click", async () => {
+async function loadTemplate() {
   clearLog();
   if (!gfxInput.files || !gfxInput.files[0]) {
-    log("Please choose a .gfx file.");
+    log("Please choose a template .gfx file.");
     return;
   }
 
   loadBtn.disabled = true;
+  loadBtn.textContent = "Loading…";
   try {
+    await loadParamHelp();
     const file = gfxInput.files[0];
     const buffer = await file.arrayBuffer();
     const archive = await GfxCore.loadGfxArchive(buffer);
@@ -454,24 +376,54 @@ loadBtn.addEventListener("click", async () => {
     appState.manualEdits = new Set();
 
     populateCategoryFilter();
-    adminMenuBtn.disabled = false;
-    downloadBtn.disabled = false;
-    readyHint.hidden = false;
+    paramSearch.value = "";
+    categoryFilter.value = "";
+    changedOnly.checked = false;
 
-    const analogCount = appState.parameters.filter((p) => p.category === "AnalogValue").length;
-    const hardwareCount = appState.parameters.filter((p) => p.category === "HardwareInput").length;
+    parameterTitle.textContent = "All parameters";
+    parameterSubtitle.textContent = appState.projectName || file.name;
+    parameterSection.hidden = false;
+    readyHint.hidden = false;
+    generateBtn.disabled = false;
+    exportCsvBtn.disabled = false;
+
+    renderParameterList();
+    parameterSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const byCategory = {};
+    appState.parameters.forEach((p) => {
+      byCategory[p.category] = (byCategory[p.category] || 0) + 1;
+    });
 
     log(`App version: ${APP_VERSION}`);
-    log(`File: ${file.name}`);
+    log(`Template loaded: ${file.name}`);
     if (archive.projectName) log(`Project: ${archive.projectName}`);
-    log(`Parameters found: ${appState.parameters.length}`);
-    log(`  Analog setpoints: ${analogCount}`);
-    log(`  Hardware inputs: ${hardwareCount}`);
-    log("Ready. Use Admin → Edit parameters, then Download .gfx.");
+    log(`Listed ${appState.parameters.length} parameters:`);
+    Object.entries(byCategory)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([category, count]) => log(`  ${category}: ${count}`));
+    log("Edit values below, then click Generate .gfx.");
   } catch (error) {
     log(`Error: ${error.message}`);
     resetState();
   } finally {
     loadBtn.disabled = false;
+    loadBtn.textContent = "Load template";
+  }
+}
+
+generateBtn.addEventListener("click", generateGfx);
+generateBtnInline.addEventListener("click", generateGfx);
+exportCsvBtn.addEventListener("click", exportCsv);
+loadBtn.addEventListener("click", loadTemplate);
+
+paramSearch.addEventListener("input", scheduleEditorRender);
+categoryFilter.addEventListener("change", scheduleEditorRender);
+changedOnly.addEventListener("change", scheduleEditorRender);
+
+gfxInput.addEventListener("change", () => {
+  resetState();
+  if (gfxInput.files && gfxInput.files[0]) {
+    loadTemplate();
   }
 });
