@@ -1,0 +1,14 @@
+{
+  "name": "distech-gfx-cli",
+  "private": true,
+  "type": "module",
+  "description": "Node CLI bridge so gfx_param_tool.py uses the same parser as the web app (gfx-core.js).",
+  "scripts": {
+    "list": "node gfx_cli.mjs list",
+    "apply": "node gfx_cli.mjs apply"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.8",
+    "jszip": "^3.10.1"
+  }
+}

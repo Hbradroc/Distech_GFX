@@ -18,6 +18,5 @@ Thumbs.db
 .idea/
 
 # Test artifacts
-._analyze*
-_temp_*
-_map_constants.py
+node_modules/
+package-lock.json

@@ -94,6 +94,14 @@
         "Includes fan, damper, and relay output minimum/maximum/default values."
       ]
     },
+    "ComSensorBinding": {
+      "label": "Com sensor register to BACnet point binding",
+      "notes": [
+        "Maps a com sensor virtual register (section + index) to a BACnet object ID.",
+        "numericObjectId encodes BACnet type and instance; writePriority is the BACnet write priority.",
+        "Enable Other variables to view and edit bindings."
+      ]
+    },
     "econo_delta": {
       "label": "Economizer delta-T or enthalpy differential",
       "notes": [

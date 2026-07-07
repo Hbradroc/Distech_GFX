@@ -2,18 +2,13 @@
 """
 Distech EC-gfxProgram (.gfx) parameter helper.
 
-A .gfx file is a ZIP archive containing XML (Main.xml holds most logic and
-setpoints). This tool extracts editable parameters, exports them to CSV, and
-applies changes back into a new .gfx file.
+Preferred: web app (gfx-core.js) or Node CLI bridge (gfx_cli.mjs).
+This script delegates to gfx_cli.mjs when Node.js is available.
 
 Typical workflow:
-  1. python gfx_param_tool.py list "project.gfx" -o parameters.csv
-  2. Edit parameters.csv (change the 'value' column)
-  3. python gfx_param_tool.py apply "project.gfx" parameters.csv -o "project_modified.gfx"
-  4. Open the modified file in EC-gfxProgram and download to the controller.
-
-Always keep a backup of the original .gfx and verify in EC-gfxProgram before
-deploying to a live controller.
+  npm install
+  python gfx_param_tool.py list "project.gfx" -o parameters.csv
+  python gfx_param_tool.py apply "project.gfx" parameters.csv -o "project_modified.gfx"
 """
 
 from __future__ import annotations
@@ -21,6 +16,7 @@ from __future__ import annotations
 import argparse
 import csv
 import shutil
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -28,6 +24,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 import xml.etree.ElementTree as ET
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+NODE_CLI = SCRIPT_DIR / "gfx_cli.mjs"
 
 
 # Resource blocks whose DefaultValue field is commonly edited as a "parameter".
@@ -302,7 +302,37 @@ def apply_parameters(gfx_path: Path, csv_path: Path, output_path: Path) -> list[
     return changed
 
 
+def node_cli_available() -> bool:
+    if not NODE_CLI.exists():
+        return False
+    try:
+        subprocess.run(
+            ["node", "--version"],
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError):
+        return False
+
+
+def run_node_cli(argv: list[str]) -> int:
+    return subprocess.call(["node", str(NODE_CLI), *argv])
+
+
 def cmd_list(args: argparse.Namespace) -> int:
+    if node_cli_available():
+        cli_args = ["list", str(args.gfx)]
+        if args.output:
+            cli_args.extend(["-o", str(args.output)])
+        return run_node_cli(cli_args)
+
+    print(
+        "Note: Node.js not found — using legacy Python parser (subset of parameters). "
+        "Install Node.js and run 'npm install' for full parity with the web app.",
+        file=sys.stderr,
+    )
     params = list_parameters(Path(args.gfx))
     if args.output:
         write_csv(params, Path(args.output))
@@ -331,6 +361,14 @@ def cmd_apply(args: argparse.Namespace) -> int:
         shutil.copy2(gfx, backup)
         print(f"Backup saved to {backup}")
 
+    if node_cli_available():
+        return run_node_cli(["apply", str(gfx), str(csv_path), "-o", str(output)])
+
+    print(
+        "Note: Node.js not found — using legacy Python parser (subset of parameters). "
+        "Install Node.js and run 'npm install' for full parity with the web app.",
+        file=sys.stderr,
+    )
     changed = apply_parameters(gfx, csv_path, output)
     if changed:
         print(f"Updated {len(changed)} value(s):")

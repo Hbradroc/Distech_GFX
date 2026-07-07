@@ -3,6 +3,19 @@
  */
 const GfxCore = (() => {
   const COM_CONFIG_PATH = "Config/Bacnet/ComSensors/CommonConfig.xml";
+  const INTERNAL_POINTS_PATH = "Info/InternalPoints.xml";
+
+  const BACNET_TYPE_FROM_POINT = {
+    AnalogInput: 0,
+    AnalogOutput: 1,
+    AnalogValue: 2,
+    BinaryInput: 3,
+    BinaryOutput: 4,
+    BinaryValue: 5,
+    MultiStateInput: 13,
+    MultiStateOutput: 14,
+    MultiStateValue: 19,
+  };
 
   const DEFAULT_VALUE_BLOCKS = {
     BacnetAnalogValueResource: "AnalogValue",
@@ -78,6 +91,7 @@ const GfxCore = (() => {
   const OTHER_CATEGORIES = new Set([
     "InternalConstant",
     "ComSensorRegister",
+    "ComSensorBinding",
     "BacnetMetadata",
     "ProgrammingConstant",
   ]);
@@ -92,6 +106,7 @@ const GfxCore = (() => {
     { id: "programming", label: "Programming sheet constants", categories: ["ProgrammingConstant"], tier: "other" },
     { id: "internal", label: "Internal logic constants", categories: ["InternalConstant"], tier: "other" },
     { id: "sensor", label: "Com sensor registers", categories: ["ComSensorRegister"], tier: "other" },
+    { id: "bindings", label: "Com sensor bindings", categories: ["ComSensorBinding"], tier: "other" },
   ];
 
   function textContent(parent, tag, fallback = "") {
@@ -100,9 +115,15 @@ const GfxCore = (() => {
     return el.textContent.trim();
   }
 
+  function childElements(parent) {
+    if (!parent) return [];
+    if (parent.children) return Array.from(parent.children);
+    return Array.from(parent.childNodes || []).filter((node) => node.nodeType === 1);
+  }
+
   function directChild(parent, tag) {
     if (!parent) return null;
-    return Array.from(parent.children).find((child) => child.tagName === tag) || null;
+    return childElements(parent).find((child) => child.tagName === tag) || null;
   }
 
   function paramKey(source, category, name, field) {
@@ -144,11 +165,87 @@ const GfxCore = (() => {
       const fb = link.getElementsByTagName("FB")[0]?.getAttribute("ref");
       const tb = link.getElementsByTagName("TB")[0]?.getAttribute("ref");
       const tp = textContent(link, "TP");
+      const fp = textContent(link, "FP");
       if (!fb || !tb) continue;
       if (!links.has(fb)) links.set(fb, []);
-      links.get(fb).push({ targetId: tb, port: tp });
+      links.get(fb).push({ targetId: tb, port: tp, fromPort: fp });
     }
     return links;
+  }
+
+  function wiringBlockLabel(blockIndex, blockId) {
+    const block = blockIndex.get(blockId);
+    if (!block) return `Block#${blockId}`;
+    const name = block.name && !["Internal Constant", "Monitor"].includes(block.name) ? block.name : "";
+    if (name) return `${name} (${block.tag})`;
+    if (block.tag === "InternalConstantNumeric") return `LogicConstant#${blockId}`;
+    return `${block.tag}#${blockId}`;
+  }
+
+  function wiringEndpoint(blockIndex, blockId, port) {
+    const block = blockIndex.get(blockId);
+    return {
+      id: blockId,
+      tag: block?.tag || "?",
+      name: block?.name || "",
+      label: wiringBlockLabel(blockIndex, blockId),
+      port: port || "",
+    };
+  }
+
+  function parseWiringGraph(mainXmlText) {
+    const doc = parseXml(mainXmlText);
+    const blockIndex = buildBlockIndex(doc);
+    const composites = [];
+    const blockTypes = new Set();
+
+    for (const block of childElements(doc.documentElement)) {
+      if (block.tagName !== "SimpleCompositeBlock") continue;
+      const id = block.getAttribute("id") || "";
+      const name = textContent(block, "Name") || `Composite#${id}`;
+      composites.push({ id, name, label: `${name} (${id})` });
+    }
+    composites.sort((a, b) => a.name.localeCompare(b.name));
+
+    const links = [];
+    for (const link of doc.getElementsByTagName("Link")) {
+      const linkId = link.getAttribute("id") || "";
+      const fromId = link.getElementsByTagName("FB")[0]?.getAttribute("ref") || "";
+      const toId = link.getElementsByTagName("TB")[0]?.getAttribute("ref") || "";
+      const fromPort = textContent(link, "FP");
+      const toPort = textContent(link, "TP");
+      if (!fromId || !toId) continue;
+      const from = wiringEndpoint(blockIndex, fromId, fromPort);
+      const to = wiringEndpoint(blockIndex, toId, toPort);
+      blockTypes.add(from.tag);
+      blockTypes.add(to.tag);
+      links.push({ id: linkId, from, to });
+    }
+
+    links.sort((a, b) => {
+      const left = `${a.from.label}|${a.from.port}|${a.to.label}|${a.to.port}`;
+      const right = `${b.from.label}|${b.from.port}|${b.to.label}|${b.to.port}`;
+      return left.localeCompare(right);
+    });
+
+    const focusBlocks = new Map();
+    for (const wire of links) {
+      focusBlocks.set(wire.from.id, wire.from.label);
+      focusBlocks.set(wire.to.id, wire.to.label);
+    }
+    const focusOptions = [...focusBlocks.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    return {
+      links,
+      composites,
+      focusOptions,
+      blockTypes: [...blockTypes].sort(),
+      blockCount: blockIndex.size,
+      linkCount: links.length,
+      compositeCount: composites.length,
+    };
   }
 
   function describeConstantUsage(blockId, blockIndex, outgoingLinks) {
@@ -354,7 +451,7 @@ const GfxCore = (() => {
     const blockIndex = buildBlockIndex(doc);
     const outgoingLinks = buildOutgoingLinks(doc);
 
-    for (const block of doc.documentElement.children) {
+    for (const block of childElements(doc.documentElement)) {
       const tag = block.tagName;
 
       if (DEFAULT_VALUE_BLOCKS[tag]) {
@@ -509,6 +606,84 @@ const GfxCore = (() => {
     return parameters;
   }
 
+  function decodeBacnetObjectId(numericObjectId) {
+    const id = Number(numericObjectId);
+    return { type: id >> 22, instance: id & 0x3fffff };
+  }
+
+  function buildInternalPointMaps(internalPointsText) {
+    const mapByOid = new Map();
+    if (!internalPointsText) return { mapByOid };
+    const doc = parseXml(internalPointsText);
+    for (const point of doc.getElementsByTagName("Point")) {
+      const name = textContent(point, "Name");
+      const index = textContent(point, "Index");
+      const type = point.getAttribute("type") || "";
+      const bacnetType = BACNET_TYPE_FROM_POINT[type];
+      if (!name || index === "" || bacnetType === undefined) continue;
+      const oid = (bacnetType << 22) | Number(index);
+      mapByOid.set(oid, name);
+    }
+    return { mapByOid };
+  }
+
+  function buildRegisterSectionMap(comConfigText) {
+    const sections = new Map();
+    if (!comConfigText) return sections;
+    const doc = parseXml(comConfigText);
+    for (const register of doc.getElementsByTagName("Register")) {
+      const section = register.getAttribute("section") || "0";
+      const name = register.getAttribute("name") || "";
+      if (!sections.has(section)) sections.set(section, []);
+      sections.get(section).push(name);
+    }
+    return sections;
+  }
+
+  function resolvePointName(numericObjectId, pointMap) {
+    const oid = Number(numericObjectId);
+    if (pointMap.mapByOid.has(oid)) return pointMap.mapByOid.get(oid);
+    const { type, instance } = decodeBacnetObjectId(oid);
+    return `BACnet type ${type} instance ${instance}`;
+  }
+
+  function parseBindingParameters(bindingPath, bindingText, registerSections, pointMap) {
+    const doc = parseXml(bindingText);
+    const parameters = [];
+    for (const binding of doc.getElementsByTagName("Binding")) {
+      const section = binding.getAttribute("registerSection") || "0";
+      const regIndex = binding.getAttribute("registerIndex") || "0";
+      const numericObjectId = binding.getAttribute("numericObjectId") || "";
+      const writePriority = binding.getAttribute("writePriority") || "";
+      const regs = registerSections.get(section) || [];
+      const registerName = regs[Number(regIndex)] || `register${regIndex}`;
+      const pointName = resolvePointName(numericObjectId, pointMap);
+      const stableName = `sec${section}[${regIndex}].${registerName}`;
+      const displayContext = `${registerName} → ${pointName}`;
+      const hint = `Com sensor register mapped to BACnet point (priority ${writePriority || "?"})`;
+      for (const [field, value] of [
+        ["numericObjectId", numericObjectId],
+        ["writePriority", writePriority],
+      ]) {
+        if (value === "") continue;
+        parameters.push(
+          makeParam({
+            source: bindingPath,
+            category: "ComSensorBinding",
+            name: stableName,
+            field,
+            value,
+            index: displayContext,
+            context: displayContext,
+            hint,
+            section: sectionForCategory("ComSensorBinding"),
+          }),
+        );
+      }
+    }
+    return parameters;
+  }
+
   function parseComSensorParameters(comConfigText) {
     const doc = parseXml(comConfigText);
     const parameters = [];
@@ -611,10 +786,15 @@ const GfxCore = (() => {
     return parameters;
   }
 
-  function parseAllParameters(mainXmlText, comConfigText, scheduleFiles) {
+  function parseAllParameters(mainXmlText, comConfigText, scheduleFiles, bindingFiles = {}, internalPointsText = null) {
     const parameters = parseMainXmlParameters(mainXmlText);
+    const registerSections = buildRegisterSectionMap(comConfigText);
+    const pointMap = buildInternalPointMaps(internalPointsText);
     if (comConfigText) {
       parameters.push(...parseComSensorParameters(comConfigText));
+    }
+    for (const [path, file] of Object.entries(bindingFiles)) {
+      parameters.push(...parseBindingParameters(path, file.text, registerSections, pointMap));
     }
     for (const [path, file] of Object.entries(scheduleFiles)) {
       parameters.push(...parseScheduleParameters(path, file.text));
@@ -641,7 +821,7 @@ const GfxCore = (() => {
     const changed = [];
     const internalConstantCounts = new Map();
 
-    for (const block of doc.documentElement.children) {
+    for (const block of childElements(doc.documentElement)) {
       const tag = block.tagName;
 
       if (DEFAULT_VALUE_BLOCKS[tag]) {
@@ -835,6 +1015,29 @@ const GfxCore = (() => {
     return parameters.map((param) => ({ ...param }));
   }
 
+  function applyBindingUpdates(bindingPath, bindingText, updates, encoding, registerSections) {
+    const doc = parseXml(bindingText);
+    const changed = [];
+    for (const binding of doc.getElementsByTagName("Binding")) {
+      const section = binding.getAttribute("registerSection") || "0";
+      const regIndex = binding.getAttribute("registerIndex") || "0";
+      const regs = registerSections.get(section) || [];
+      const registerName = regs[Number(regIndex)] || `register${regIndex}`;
+      const stableName = `sec${section}[${regIndex}].${registerName}`;
+      for (const field of ["numericObjectId", "writePriority"]) {
+        const key = paramKey(bindingPath, "ComSensorBinding", stableName, field);
+        if (!(key in updates)) continue;
+        const oldValue = binding.getAttribute(field) || "";
+        const newValue = updates[key];
+        if (oldValue !== newValue) {
+          binding.setAttribute(field, newValue);
+          changed.push(`ComSensorBinding.${stableName}.${field}: ${oldValue} -> ${newValue}`);
+        }
+      }
+    }
+    return { xml: serializeXmlDocument(doc, encoding), changed };
+  }
+
   async function loadGfxArchive(arrayBuffer) {
     const zip = await JSZip.loadAsync(arrayBuffer);
     const mainFile = zip.file("Main.xml");
@@ -847,13 +1050,23 @@ const GfxCore = (() => {
     const comConfigText = comFile ? await comFile.async("string") : null;
 
     const scheduleFiles = {};
+    const bindingFiles = {};
     for (const path of Object.keys(zip.files)) {
-      if (!path.startsWith("Config/Bacnet/Schedules/") || !path.endsWith(".xml")) continue;
-      const text = await zip.file(path).async("string");
-      scheduleFiles[path] = { text, encoding: detectXmlEncoding(text) };
+      if (path.startsWith("Config/Bacnet/Schedules/") && path.endsWith(".xml")) {
+        const text = await zip.file(path).async("string");
+        scheduleFiles[path] = { text, encoding: detectXmlEncoding(text) };
+      }
+      if (path.startsWith("Config/Bacnet/ComSensors/") && /Bindings.*\.xml$/i.test(path)) {
+        const text = await zip.file(path).async("string");
+        bindingFiles[path] = { text, encoding: detectXmlEncoding(text) };
+      }
     }
 
-    const parameters = parseAllParameters(mainXmlText, comConfigText, scheduleFiles);
+    const internalPointsFile = zip.file(INTERNAL_POINTS_PATH);
+    const internalPointsText = internalPointsFile ? await internalPointsFile.async("string") : null;
+
+    const parameters = parseAllParameters(mainXmlText, comConfigText, scheduleFiles, bindingFiles, internalPointsText);
+    const wiringGraph = parseWiringGraph(mainXmlText);
 
     let projectName = "";
     const infoFile = zip.file("Info/ProjectInfo.xml");
@@ -867,6 +1080,9 @@ const GfxCore = (() => {
       mainXmlText,
       comConfigText,
       scheduleFiles,
+      bindingFiles,
+      internalPointsText,
+      wiringGraph,
       parameters,
       projectName,
       originalBuffer: arrayBuffer,
@@ -876,6 +1092,7 @@ const GfxCore = (() => {
   async function buildModifiedGfx(archiveState, parameters) {
     const updates = parametersToUpdates(parameters);
     const changed = [];
+    const registerSections = buildRegisterSectionMap(archiveState.comConfigText);
 
     const mainResult = applyMainXmlUpdates(archiveState.mainXmlText, updates);
     changed.push(...mainResult.changed);
@@ -885,6 +1102,13 @@ const GfxCore = (() => {
       const comResult = applyComConfigUpdates(archiveState.comConfigText, updates);
       comConfigXml = comResult.xml;
       changed.push(...comResult.changed);
+    }
+
+    const bindingOutputs = {};
+    for (const [path, file] of Object.entries(archiveState.bindingFiles || {})) {
+      const bindingResult = applyBindingUpdates(path, file.text, updates, file.encoding, registerSections);
+      bindingOutputs[path] = bindingResult.xml;
+      changed.push(...bindingResult.changed);
     }
 
     const scheduleOutputs = {};
@@ -898,6 +1122,10 @@ const GfxCore = (() => {
     zip.file("Main.xml", mainResult.xml);
     if (archiveState.comConfigText && comConfigXml) {
       zip.file(COM_CONFIG_PATH, comConfigXml);
+    }
+    for (const [path, xml] of Object.entries(bindingOutputs)) {
+      const encoding = archiveState.bindingFiles[path]?.encoding || "utf-8";
+      zip.file(path, encodeXmlText(xml, encoding));
     }
     for (const [path, xml] of Object.entries(scheduleOutputs)) {
       const encoding = archiveState.scheduleFiles[path]?.encoding || "utf-8";
@@ -951,6 +1179,7 @@ const GfxCore = (() => {
     paramKey,
     sectionForCategory,
     parseAllParameters,
+    parseWiringGraph,
     parametersToUpdates,
     cloneParameters,
     loadGfxArchive,
@@ -962,4 +1191,7 @@ const GfxCore = (() => {
 
 if (typeof window !== "undefined") {
   window.GfxCore = GfxCore;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.GfxCore = GfxCore;
 }

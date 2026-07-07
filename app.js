@@ -1,4 +1,4 @@
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.5.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 
@@ -7,6 +7,10 @@ const loadBtn = document.getElementById("loadBtn");
 const generateBtn = document.getElementById("generateBtn");
 const generateBtnInline = document.getElementById("generateBtnInline");
 const exportCsvBtn = document.getElementById("exportCsvBtn");
+const openWiringBtn = document.getElementById("openWiringBtn");
+const openWiringBtnInline = document.getElementById("openWiringBtnInline");
+const wiringLaunch = document.getElementById("wiringLaunch");
+const wiringLaunchText = document.getElementById("wiringLaunchText");
 const readyHint = document.getElementById("readyHint");
 const logEl = document.getElementById("log");
 const parameterSection = document.getElementById("parameterSection");
@@ -25,6 +29,7 @@ const appState = {
   projectName: "",
   archive: null,
   parameters: [],
+  wiringGraph: null,
   originalSnapshot: new Map(),
   manualEdits: new Set(),
 };
@@ -58,10 +63,14 @@ function resetState() {
   appState.projectName = "";
   appState.archive = null;
   appState.parameters = [];
+  appState.wiringGraph = null;
   appState.originalSnapshot = new Map();
   appState.manualEdits = new Set();
   generateBtn.disabled = true;
   exportCsvBtn.disabled = true;
+  if (openWiringBtn) openWiringBtn.disabled = true;
+  if (openWiringBtnInline) openWiringBtnInline.disabled = true;
+  if (wiringLaunch) wiringLaunch.hidden = true;
   readyHint.hidden = true;
   parameterSection.hidden = true;
   editorList.innerHTML = "";
@@ -92,6 +101,7 @@ async function loadParamHelp() {
 function lookupParamHelp(param) {
   const params = paramHelpCache?.parameters || {};
   if (params[param.name]) return params[param.name];
+  if (param.category === "ComSensorBinding" && params.ComSensorBinding) return params.ComSensorBinding;
   if (param.category === "InternalConstant" && params.InternalConstant) return params.InternalConstant;
   const portName = param.name.includes(".") ? param.name.split(".").pop() : param.name;
   if (params[portName]) return params[portName];
@@ -108,11 +118,16 @@ function renderParamHelpPanel(param) {
   if (!help) {
     const extra = param.hint ? `<p class="help-path">${escapeHtml(param.hint)}</p>` : "";
     const feeds = param.context ? `<p class="help-path"><strong>Connected to:</strong> ${escapeHtml(param.context)}</p>` : "";
+    const blockId = blockIdFromParam(param);
+    const wiringLink = blockId
+      ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View in wiring diagram</button>`
+      : "";
     editorHelp.innerHTML = `
       <h3>${escapeHtml(param.name)}</h3>
       <p class="help-label">${escapeHtml(label)}</p>
       ${feeds}
       ${extra}
+      ${wiringLink}
       <p class="help-path">No mapped description in param_help.json yet.</p>
       <div class="help-links">
         <a href="${manualHome}" target="_blank" rel="noopener noreferrer">EC-gfxProgram constants guide</a>
@@ -123,12 +138,21 @@ function renderParamHelpPanel(param) {
   const title = help.label ? `<p class="help-label">${escapeHtml(help.label)}</p>` : "";
   const notes = (help.notes || []).map((n) => `<li>${escapeHtml(n)}</li>`).join("");
   const notesBlock = notes ? `<ul class="help-notes">${notes}</ul>` : "";
+  const feeds = param.context ? `<p class="help-path"><strong>Connected to:</strong> ${escapeHtml(param.context)}</p>` : "";
+  const hint = param.hint ? `<p class="help-path">${escapeHtml(param.hint)}</p>` : "";
+  const blockId = blockIdFromParam(param);
+  const wiringLink = blockId
+    ? `<button type="button" class="help-wiring-link" data-block-id="${escapeHtml(blockId)}">View in wiring diagram</button>`
+    : "";
   const docUrl = help.manualUrl || manualHome;
   editorHelp.innerHTML = `
     <h3>${escapeHtml(param.name)}</h3>
     ${title}
     <p class="help-path">${escapeHtml(label)}${param.controller_specific === "1" ? " · Controller specific" : ""}</p>
+    ${feeds}
+    ${hint}
     ${notesBlock}
+    ${wiringLink}
     <div class="help-links">
       <a href="${docUrl}" target="_blank" rel="noopener noreferrer">Open Distech documentation</a>
     </div>`;
@@ -386,6 +410,32 @@ function exportCsv() {
   log(`Exported ${appState.parameters.length} parameters to CSV.`);
 }
 
+function openWiringViewer(focusBlockId = "") {
+  if (!appState.wiringGraph) {
+    log("Load a template first to view wiring.");
+    return;
+  }
+  const payload = {
+    projectName: appState.projectName || appState.fileName,
+    fileName: appState.fileName,
+    exportedAt: new Date().toISOString(),
+    focusBlockId: focusBlockId || "",
+    wiring: appState.wiringGraph,
+  };
+  sessionStorage.setItem("distechGfxWiring", JSON.stringify(payload));
+  const url = `wiring.html?v=${APP_VERSION}`;
+  const popup = window.open(url, "distechGfxWiring", "noopener,noreferrer,width=1280,height=900");
+  if (!popup) {
+    log("Popup blocked — allow popups for this site, or open wiring.html after loading a template.");
+    window.location.href = url;
+  }
+}
+
+function blockIdFromParam(param) {
+  const match = param.name.match(/#(\d+)$/);
+  return match ? match[1] : "";
+}
+
 async function loadTemplate() {
   clearLog();
   if (!gfxInput.files || !gfxInput.files[0]) {
@@ -410,6 +460,7 @@ async function loadTemplate() {
       scheduleFiles: archive.scheduleFiles,
     };
     appState.parameters = GfxCore.cloneParameters(archive.parameters);
+    appState.wiringGraph = archive.wiringGraph;
     appState.originalSnapshot = snapshotParameters(appState.parameters);
     appState.manualEdits = new Set();
 
@@ -425,6 +476,12 @@ async function loadTemplate() {
     readyHint.hidden = false;
     generateBtn.disabled = false;
     exportCsvBtn.disabled = false;
+    if (openWiringBtn) openWiringBtn.disabled = false;
+    if (openWiringBtnInline) openWiringBtnInline.disabled = false;
+    if (wiringLaunch) wiringLaunch.hidden = false;
+    if (wiringLaunchText && archive.wiringGraph) {
+      wiringLaunchText.textContent = `${archive.wiringGraph.linkCount} connections across ${archive.wiringGraph.compositeCount} logic modules — opens in a new window. Filter, focus one block, then Print / Save PDF.`;
+    }
 
     renderParameterList();
     parameterSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -442,6 +499,7 @@ async function loadTemplate() {
         if (counts[category]) log(`    - ${category}: ${counts[category]}`);
       });
     });
+    log(`Wiring: ${archive.wiringGraph.linkCount} connections — click Open wiring viewer to inspect or print.`);
     log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {
     log(`Error: ${error.message}`);
@@ -455,6 +513,13 @@ async function loadTemplate() {
 generateBtn.addEventListener("click", generateGfx);
 generateBtnInline.addEventListener("click", generateGfx);
 exportCsvBtn.addEventListener("click", exportCsv);
+if (openWiringBtn) openWiringBtn.addEventListener("click", () => openWiringViewer());
+if (openWiringBtnInline) openWiringBtnInline.addEventListener("click", () => openWiringViewer());
+editorHelp.addEventListener("click", (event) => {
+  const btn = event.target.closest(".help-wiring-link");
+  if (!btn) return;
+  openWiringViewer(btn.dataset.blockId || "");
+});
 loadBtn.addEventListener("click", loadTemplate);
 
 paramSearch.addEventListener("input", scheduleEditorRender);

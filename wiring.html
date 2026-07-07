@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distech GFX — Wiring Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="wiring.css?v=1.5.0" />
+    <script defer src="wiring.js?v=1.5.0"></script>
+  </head>
+  <body>
+    <header class="wiring-toolbar no-print">
+      <div class="wiring-toolbar-title">
+        <h1>Logic wiring viewer</h1>
+        <p id="wiringSubtitle" class="wiring-subtitle">Read-only — parsed from Main.xml</p>
+      </div>
+      <div class="wiring-toolbar-actions">
+        <button type="button" id="printBtn" class="primary">Print / Save PDF</button>
+        <button type="button" id="closeBtn" class="secondary">Close</button>
+      </div>
+    </header>
+
+    <div class="wiring-print-banner print-only">
+      <h1 id="printTitle">Distech GFX wiring diagram</h1>
+      <p id="printMeta"></p>
+    </div>
+
+    <main class="wiring-main">
+      <p id="wiringStats" class="wiring-stats"></p>
+
+      <section class="wiring-controls no-print" aria-label="Wiring filters">
+        <input type="search" id="wireSearch" placeholder="Search block name, port, or type…" autocomplete="off" />
+        <select id="compositeFilter" aria-label="Filter by logic module">
+          <option value="">All logic modules</option>
+        </select>
+        <select id="tagFilter" aria-label="Filter by block type">
+          <option value="">All block types</option>
+        </select>
+        <select id="focusBlock" aria-label="Focus on one block">
+          <option value="">Focus block (diagram)…</option>
+        </select>
+        <label class="wiring-toggle">
+          <input type="checkbox" id="diagramOnly" />
+          Diagram + focused links only
+        </label>
+      </section>
+
+      <section id="focusDiagram" class="wiring-diagram" hidden aria-label="Focused wiring diagram"></section>
+
+      <section class="wiring-table-wrap">
+        <table class="wiring-table" id="wiringTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>From block</th>
+              <th>From port</th>
+              <th></th>
+              <th>To block</th>
+              <th>To port</th>
+            </tr>
+          </thead>
+          <tbody id="wiringTableBody"></tbody>
+        </table>
+        <p id="wiringEmpty" class="wiring-empty" hidden>No connections match the current filters.</p>
+      </section>
+
+      <footer class="wiring-footer">
+        <p>Viewer only — wiring is not modified. Use EC-gfxProgram to change connections.</p>
+      </footer>
+    </main>
+  </body>
+</html>

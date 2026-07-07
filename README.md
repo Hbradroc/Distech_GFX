@@ -49,7 +49,24 @@ It does **not** rewrite block wiring links themselves (which block connects to w
 | Schedules & calendars | Weekly occupancy times and default schedule values |
 | Programming sheet constants | `SetpointConstant` / `NumericConstant` blocks (when present) |
 | Internal logic constants | Fixed numbers inside logic blocks (`LogicConstant#id`) |
+| Com sensor bindings | Register → BACnet point mappings in `*Bindings*.xml` |
 | Com sensor registers | Com sensor default register values |
+
+### Single source of truth
+
+`gfx-core.js` is the canonical parser for the web app. For CLI/CSV workflows:
+
+```bash
+npm install
+node gfx_cli.mjs list project.gfx -o parameters.csv
+node gfx_cli.mjs apply project.gfx parameters.csv -o project_modified.gfx
+```
+
+`gfx_param_tool.py` delegates to `gfx_cli.mjs` when Node.js is installed; otherwise it uses a limited legacy parser.
+
+### What Distech does not provide
+
+There is **no public SDK** to edit EC-gfxProgram block wiring or `.gfx` project files programmatically. Distech Developer Tools ([developer.distech-controls.com](https://developer.distech-controls.com/)) cover **live controllers** (ECLYPSE REST API, Sky SDK) — not the programming sheet editor. Block wiring remains an EC-gfxProgram task, or a custom XML graph editor built from reverse-engineered `Main.xml` `<Link>` elements.
 
 ## CLI (optional)
 
@@ -71,6 +88,8 @@ python gfx_param_tool.py apply project.gfx parameters.csv -o project_modified.gf
 | `app.js` | Browser UI logic |
 | `gfx-core.js` | Parse / apply GFX parameters in the browser (all sections) |
 | `param_help.json` | Parameter descriptions for the editor help panel |
+| `wiring.html` | Read-only logic wiring viewer (print / PDF) |
+| `wiring.js` / `wiring.css` | Wiring viewer UI |
 | `styles.css` | Shared styling (matches dvf2Json look) |
 | `gfx_param_tool.py` | Command-line helper |
 

@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script defer src="gfx-core.js?v=1.3.0"></script>
-    <script defer src="app.js?v=1.3.0"></script>
+    <script defer src="gfx-core.js?v=1.5.0"></script>
+    <script defer src="app.js?v=1.5.0"></script>
   </head>
   <body>
     <main class="shell">
@@ -61,6 +61,7 @@
             <p id="parameterSubtitle" class="parameter-subtitle"></p>
           </div>
           <div class="parameter-header-actions">
+            <button type="button" id="openWiringBtn" class="secondary wiring-open-btn" disabled>Open wiring viewer</button>
             <button type="button" id="generateBtnInline" class="generate-inline">Generate .gfx</button>
           </div>
         </header>
@@ -81,6 +82,14 @@
         </div>
 
         <p class="editor-meta" id="editorMeta"></p>
+
+        <section id="wiringLaunch" class="wiring-launch no-print" hidden>
+          <div>
+            <h3>Logic wiring (read-only)</h3>
+            <p id="wiringLaunchText">Opens a separate window with all programming-sheet connections. Filter by module, print or save as PDF.</p>
+          </div>
+          <button type="button" id="openWiringBtnInline" class="secondary" disabled>Open wiring viewer</button>
+        </section>
 
         <div class="parameter-body">
           <div class="editor-list" id="editorList"></div>

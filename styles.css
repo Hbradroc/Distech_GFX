@@ -266,9 +266,51 @@ button:disabled {
   word-break: break-word;
 }
 
+.help-wiring-link {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.wiring-launch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  background: #eef8f6;
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+}
+
+.wiring-launch h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.wiring-launch p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted, #5c574d);
+  max-width: 52rem;
+  line-height: 1.45;
+}
+
 .parameter-header-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.parameter-header-actions .wiring-open-btn {
+  white-space: nowrap;
 }
 
 .generate-inline {
