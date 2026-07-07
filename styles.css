@@ -335,6 +335,33 @@ button:disabled {
   border-bottom: 1px solid var(--line);
 }
 
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0 6px;
+  margin-top: 8px;
+  border-top: 2px solid rgba(22, 22, 22, 0.08);
+}
+
+.section-header:first-child {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 4px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--accent);
+}
+
+.section-header span {
+  font-size: 0.78rem;
+  color: rgba(22, 22, 22, 0.62);
+}
+
 .param-row {
   display: grid;
   grid-template-columns: minmax(180px, 1.1fr) minmax(120px, 1fr) auto auto;

@@ -35,7 +35,21 @@ A `.gfx` file is a ZIP archive. The editor updates known parameter fields in:
 | `Main.xml` | `BacnetAnalogValueResource` (`DefaultValue`), hardware input scaling, internal constants |
 | `Config/Bacnet/ComSensors/CommonConfig.xml` | Com sensor register defaults |
 
-It does **not** rewrite control logic, composite block wiring, or BACnet object instances. Use EC-gfxProgram for those changes.
+It does **not** rewrite block wiring links themselves (which block connects to which). Use EC-gfxProgram for rewiring logic.
+
+### Parameter sections in the web app
+
+| Section | What it includes |
+|---------|------------------|
+| Analog / binary setpoints | `supply_low`, `dmp_min`, alarm flags, etc. |
+| Hardware inputs & outputs | Input scaling, output min/max/default, PWM period |
+| PID tuning | Proportional band, integral/derivative time, dead band |
+| Logic module ports | Composite inputs/outputs such as `ventilate.vent_disable` |
+| BACnet COV, alarms & metadata | `CovPeriod`, `ObjectName`, `TAG`, `AlarmParameters` |
+| Schedules & calendars | Weekly occupancy times and default schedule values |
+| Programming sheet constants | `SetpointConstant` / `NumericConstant` blocks (when present) |
+| Internal logic constants | Fixed numbers inside logic blocks (`LogicConstant#id`) |
+| Com sensor registers | Com sensor default register values |
 
 ## CLI (optional)
 
@@ -55,7 +69,7 @@ python gfx_param_tool.py apply project.gfx parameters.csv -o project_modified.gf
 |------|-------------|
 | `index.html` | Web UI |
 | `app.js` | Browser UI logic |
-| `gfx-core.js` | Parse / apply GFX parameters in the browser |
+| `gfx-core.js` | Parse / apply GFX parameters in the browser (all sections) |
 | `param_help.json` | Parameter descriptions for the editor help panel |
 | `styles.css` | Shared styling (matches dvf2Json look) |
 | `gfx_param_tool.py` | Command-line helper |

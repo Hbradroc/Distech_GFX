@@ -43,8 +43,46 @@
     "vent_disable": {
       "label": "Ventilation disable logic input",
       "notes": [
-        "This is usually a logic port inside a composite block, not a simple DefaultValue point.",
-        "Prefer editing wiring in EC-gfxProgram if you need to change behavior rather than a numeric default."
+        "Shown as ventilate.vent_disable in the Logic module ports section.",
+        "OV is the override/default value on the composite module input port."
+      ]
+    },
+    "CompositeInput.OV": {
+      "label": "Logic module input override value",
+      "notes": [
+        "Composite blocks expose named input ports such as vent_disable or supply_call.",
+        "Editing OV changes the default/override on that logic port."
+      ]
+    },
+    "PidTuning": {
+      "label": "PID loop tuning parameters",
+      "notes": [
+        "ProportionalBand, IntegralTime, and DerivativeTime are BACnet PID resource settings.",
+        "Example: Disch Freeze PID in this template."
+      ]
+    },
+    "BacnetMetadata": {
+      "label": "BACnet COV, alarm, and object metadata",
+      "notes": [
+        "Includes CovPeriod, CovIncrement, ObjectName, TAG, AlarmEnable, and AlarmParameters."
+      ]
+    },
+    "Schedule": {
+      "label": "Schedule default occupancy values",
+      "notes": [
+        "Default and event-default occupancy states for BACnet schedules."
+      ]
+    },
+    "ScheduleTime": {
+      "label": "Schedule weekly time entries",
+      "notes": [
+        "Each row is one day/time slot with an occupancy state such as Occupied or Standby."
+      ]
+    },
+    "HardwareOutput": {
+      "label": "Hardware output scaling and defaults",
+      "notes": [
+        "Includes fan, damper, and relay output minimum/maximum/default values."
       ]
     },
     "econo_delta": {

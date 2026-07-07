@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script defer src="gfx-core.js?v=1.1.0"></script>
-    <script defer src="app.js?v=1.1.0"></script>
+    <script defer src="gfx-core.js?v=1.2.0"></script>
+    <script defer src="app.js?v=1.2.0"></script>
   </head>
   <body>
     <main class="shell">
@@ -28,8 +28,9 @@
 
         <h1>Distech GFX Editor</h1>
         <p class="sub">
-          Upload an EC-gfxProgram <code>.gfx</code> template. All parameters are listed for editing.
-          Click <strong>Generate .gfx</strong> to write your values into the template and download the updated file.
+          Upload an EC-gfxProgram <code>.gfx</code> template. Parameters are grouped by type
+          (setpoints, hardware, PID, logic ports, BACnet metadata, schedules, and more).
+          Click <strong>Generate .gfx</strong> to write your values into the template.
         </p>
 
         <div class="field">
@@ -66,8 +67,8 @@
 
         <div class="editor-toolbar">
           <input type="search" id="paramSearch" placeholder="Search parameter name…" autocomplete="off" />
-          <select id="categoryFilter" aria-label="Filter by category">
-            <option value="">All categories</option>
+          <select id="categoryFilter" aria-label="Filter by section or category">
+            <option value="">All sections</option>
           </select>
           <label class="filter-toggle">
             <input type="checkbox" id="changedOnly" />

@@ -1,4 +1,4 @@
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 
@@ -91,6 +91,8 @@ async function loadParamHelp() {
 function lookupParamHelp(param) {
   const params = paramHelpCache?.parameters || {};
   if (params[param.name]) return params[param.name];
+  const portName = param.name.includes(".") ? param.name.split(".").pop() : param.name;
+  if (params[portName]) return params[portName];
   const composite = `${param.category}.${param.field}`;
   if (params[composite]) return params[composite];
   return null;
@@ -155,14 +157,23 @@ function setParameterValue(key, rawValue) {
 }
 
 function populateCategoryFilter() {
-  const categories = [...new Set(appState.parameters.map((p) => p.category))].sort();
-  categoryFilter.innerHTML = '<option value="">All categories</option>';
-  categories.forEach((category) => {
-    const option = document.createElement("option");
-    option.value = category;
-    option.textContent = category;
-    categoryFilter.appendChild(option);
-  });
+  categoryFilter.innerHTML = '<option value="">All sections</option>';
+  const present = new Set(appState.parameters.map((p) => p.category));
+
+  for (const section of GfxCore.CATEGORY_SECTIONS) {
+    const categories = section.categories.filter((category) => present.has(category));
+    if (!categories.length) continue;
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = section.label;
+    categories.forEach((category) => {
+      const count = appState.parameters.filter((p) => p.category === category).length;
+      const option = document.createElement("option");
+      option.value = category;
+      option.textContent = `${category} (${count})`;
+      optgroup.appendChild(option);
+    });
+    categoryFilter.appendChild(optgroup);
+  }
 }
 
 function getVisibleParameters() {
@@ -207,10 +218,21 @@ function renderParameterList() {
   }
 
   const fragment = document.createDocumentFragment();
-  const limit = 600;
+  const limit = 800;
   const visible = rows.slice(0, limit);
+  let currentSection = "";
 
   visible.forEach((param) => {
+    const sectionLabel = param.section || GfxCore.sectionForCategory(param.category);
+    if (sectionLabel !== currentSection) {
+      currentSection = sectionLabel;
+      const header = document.createElement("div");
+      header.className = "section-header";
+      const count = rows.filter((row) => (row.section || GfxCore.sectionForCategory(row.category)) === sectionLabel).length;
+      header.innerHTML = `<h3>${escapeHtml(sectionLabel)}</h3><span>${count} item${count === 1 ? "" : "s"}</span>`;
+      fragment.appendChild(header);
+    }
+
     const key = GfxCore.paramKey(param.source, param.category, param.name, param.field);
     const row = document.createElement("div");
     row.className = `param-row${appState.manualEdits.has(key) ? " manual-edit" : ""}`;
@@ -223,10 +245,18 @@ function renderParameterList() {
     const input = document.createElement("input");
     input.type = "text";
     input.value = param.value;
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "param-reset";
+    resetBtn.textContent = "Reset";
+    resetBtn.disabled = !appState.manualEdits.has(key);
+
     input.addEventListener("focus", () => selectParamRow(row, param));
     input.addEventListener("change", () => {
       setParameterValue(key, input.value);
       row.classList.toggle("manual-edit", appState.manualEdits.has(key));
+      resetBtn.disabled = !appState.manualEdits.has(key);
       updateEditorMeta(getVisibleParameters().length);
     });
 
@@ -236,11 +266,6 @@ function renderParameterList() {
     infoBtn.textContent = "Info";
     infoBtn.addEventListener("click", () => selectParamRow(row, param));
 
-    const resetBtn = document.createElement("button");
-    resetBtn.type = "button";
-    resetBtn.className = "param-reset";
-    resetBtn.textContent = "Reset";
-    resetBtn.disabled = !appState.manualEdits.has(key);
     resetBtn.addEventListener("click", () => {
       const original = appState.originalSnapshot.get(key);
       if (original === undefined) return;
@@ -370,6 +395,7 @@ async function loadTemplate() {
       originalBuffer: buffer,
       mainXmlText: archive.mainXmlText,
       comConfigText: archive.comConfigText,
+      scheduleFiles: archive.scheduleFiles,
     };
     appState.parameters = GfxCore.cloneParameters(archive.parameters);
     appState.originalSnapshot = snapshotParameters(appState.parameters);
@@ -390,18 +416,19 @@ async function loadTemplate() {
     renderParameterList();
     parameterSection.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    const byCategory = {};
-    appState.parameters.forEach((p) => {
-      byCategory[p.category] = (byCategory[p.category] || 0) + 1;
-    });
-
+    const counts = GfxCore.countByCategory(appState.parameters);
     log(`App version: ${APP_VERSION}`);
     log(`Template loaded: ${file.name}`);
     if (archive.projectName) log(`Project: ${archive.projectName}`);
     log(`Listed ${appState.parameters.length} parameters:`);
-    Object.entries(byCategory)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([category, count]) => log(`  ${category}: ${count}`));
+    GfxCore.CATEGORY_SECTIONS.forEach((section) => {
+      const sectionCount = section.categories.reduce((sum, category) => sum + (counts[category] || 0), 0);
+      if (!sectionCount) return;
+      log(`  ${section.label}: ${sectionCount}`);
+      section.categories.forEach((category) => {
+        if (counts[category]) log(`    - ${category}: ${counts[category]}`);
+      });
+    });
     log("Edit values below, then click Generate .gfx.");
   } catch (error) {
     log(`Error: ${error.message}`);
