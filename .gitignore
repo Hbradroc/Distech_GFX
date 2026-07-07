@@ -18,5 +18,6 @@ Thumbs.db
 .idea/
 
 # Test artifacts
-test_*.gfx
-test_*.csv
+._analyze*
+_temp_*
+_map_constants.py

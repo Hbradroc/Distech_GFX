@@ -1,4 +1,4 @@
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 
@@ -15,6 +15,7 @@ const parameterSubtitle = document.getElementById("parameterSubtitle");
 const paramSearch = document.getElementById("paramSearch");
 const categoryFilter = document.getElementById("categoryFilter");
 const changedOnly = document.getElementById("changedOnly");
+const showOtherVariables = document.getElementById("showOtherVariables");
 const editorList = document.getElementById("editorList");
 const editorMeta = document.getElementById("editorMeta");
 const editorHelp = document.getElementById("editorHelp");
@@ -91,6 +92,7 @@ async function loadParamHelp() {
 function lookupParamHelp(param) {
   const params = paramHelpCache?.parameters || {};
   if (params[param.name]) return params[param.name];
+  if (param.category === "InternalConstant" && params.InternalConstant) return params.InternalConstant;
   const portName = param.name.includes(".") ? param.name.split(".").pop() : param.name;
   if (params[portName]) return params[portName];
   const composite = `${param.category}.${param.field}`;
@@ -104,10 +106,14 @@ function renderParamHelpPanel(param) {
   const label = `${param.category} · ${param.field}`;
 
   if (!help) {
+    const extra = param.hint ? `<p class="help-path">${escapeHtml(param.hint)}</p>` : "";
+    const feeds = param.context ? `<p class="help-path"><strong>Connected to:</strong> ${escapeHtml(param.context)}</p>` : "";
     editorHelp.innerHTML = `
       <h3>${escapeHtml(param.name)}</h3>
       <p class="help-label">${escapeHtml(label)}</p>
-      <p class="help-path">No mapped description yet. Search this point in EC-gfxProgram or the Distech docs.</p>
+      ${feeds}
+      ${extra}
+      <p class="help-path">No mapped description in param_help.json yet.</p>
       <div class="help-links">
         <a href="${manualHome}" target="_blank" rel="noopener noreferrer">EC-gfxProgram constants guide</a>
       </div>`;
@@ -183,6 +189,7 @@ function getVisibleParameters() {
 
   return appState.parameters.filter((param) => {
     const key = GfxCore.paramKey(param.source, param.category, param.name, param.field);
+    if (!showOtherVariables.checked && param.tier === "other") return false;
     if (onlyChanged && !appState.manualEdits.has(key)) return false;
     if (category && param.category !== category) return false;
     if (!query) return true;
@@ -195,7 +202,11 @@ function getVisibleParameters() {
 
 function updateEditorMeta(count) {
   const manual = appState.manualEdits.size;
-  editorMeta.textContent = `Showing ${count} of ${appState.parameters.length} parameters · ${manual} changed`;
+  const otherCount = appState.parameters.filter((p) => p.tier === "other").length;
+  const otherNote = showOtherVariables.checked
+    ? ""
+    : ` · ${otherCount} other variable${otherCount === 1 ? "" : "s"} hidden`;
+  editorMeta.textContent = `Showing ${count} of ${appState.parameters.length} parameters · ${manual} changed${otherNote}`;
 }
 
 function renderParameterList() {
@@ -239,8 +250,9 @@ function renderParameterList() {
 
     const keyEl = document.createElement("div");
     keyEl.className = "param-key";
-    keyEl.innerHTML = `<strong>${escapeHtml(param.name)}</strong><span>${escapeHtml(param.category)} · ${escapeHtml(param.field)}</span>`;
-    keyEl.title = param.source;
+    const contextLine = param.hint || param.context;
+    keyEl.innerHTML = `<strong>${escapeHtml(param.name)}</strong><span>${escapeHtml(param.category)} · ${escapeHtml(param.field)}</span>${contextLine ? `<em class="param-context">${escapeHtml(contextLine)}</em>` : ""}`;
+    keyEl.title = [param.source, param.context, param.hint].filter(Boolean).join(" | ");
 
     const input = document.createElement("input");
     input.type = "text";
@@ -405,6 +417,7 @@ async function loadTemplate() {
     paramSearch.value = "";
     categoryFilter.value = "";
     changedOnly.checked = false;
+    showOtherVariables.checked = false;
 
     parameterTitle.textContent = "All parameters";
     parameterSubtitle.textContent = appState.projectName || file.name;
@@ -429,7 +442,7 @@ async function loadTemplate() {
         if (counts[category]) log(`    - ${category}: ${counts[category]}`);
       });
     });
-    log("Edit values below, then click Generate .gfx.");
+    log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {
     log(`Error: ${error.message}`);
     resetState();
@@ -447,6 +460,7 @@ loadBtn.addEventListener("click", loadTemplate);
 paramSearch.addEventListener("input", scheduleEditorRender);
 categoryFilter.addEventListener("change", scheduleEditorRender);
 changedOnly.addEventListener("change", scheduleEditorRender);
+showOtherVariables.addEventListener("change", scheduleEditorRender);
 
 gfxInput.addEventListener("change", () => {
   resetState();

@@ -74,16 +74,24 @@ const GfxCore = (() => {
 
   const REGISTER_FIELDS = ["defaultValue", "unit"];
 
+  /** Hidden by default — enable "Other variables" checkbox in the UI. */
+  const OTHER_CATEGORIES = new Set([
+    "InternalConstant",
+    "ComSensorRegister",
+    "BacnetMetadata",
+    "ProgrammingConstant",
+  ]);
+
   const CATEGORY_SECTIONS = [
-    { id: "setpoints", label: "Analog / binary setpoints", categories: ["AnalogValue", "BinaryValue", "MultiStateValue"] },
-    { id: "hardware", label: "Hardware inputs & outputs", categories: ["HardwareInput", "HardwareOutput"] },
-    { id: "pid", label: "PID tuning", categories: ["PidTuning"] },
-    { id: "logic", label: "Logic module ports", categories: ["CompositeInput", "CompositeOutput"] },
-    { id: "bacnet", label: "BACnet COV, alarms & metadata", categories: ["BacnetMetadata"] },
-    { id: "schedules", label: "Schedules & calendars", categories: ["Schedule", "ScheduleTime"] },
-    { id: "programming", label: "Programming sheet constants", categories: ["ProgrammingConstant"] },
-    { id: "internal", label: "Internal logic constants", categories: ["InternalConstant"] },
-    { id: "sensor", label: "Com sensor registers", categories: ["ComSensorRegister"] },
+    { id: "setpoints", label: "Analog / binary setpoints", categories: ["AnalogValue", "BinaryValue", "MultiStateValue"], tier: "primary" },
+    { id: "hardware", label: "Hardware inputs & outputs", categories: ["HardwareInput", "HardwareOutput"], tier: "primary" },
+    { id: "pid", label: "PID tuning", categories: ["PidTuning"], tier: "primary" },
+    { id: "logic", label: "Logic module ports", categories: ["CompositeInput", "CompositeOutput"], tier: "primary" },
+    { id: "schedules", label: "Schedules & calendars", categories: ["Schedule", "ScheduleTime"], tier: "primary" },
+    { id: "bacnet", label: "BACnet COV, alarms & metadata", categories: ["BacnetMetadata"], tier: "other" },
+    { id: "programming", label: "Programming sheet constants", categories: ["ProgrammingConstant"], tier: "other" },
+    { id: "internal", label: "Internal logic constants", categories: ["InternalConstant"], tier: "other" },
+    { id: "sensor", label: "Com sensor registers", categories: ["ComSensorRegister"], tier: "other" },
   ];
 
   function textContent(parent, tag, fallback = "") {
@@ -101,8 +109,167 @@ const GfxCore = (() => {
     return `${source}\0${category}\0${name}\0${field}`;
   }
 
-  function makeParam({ source, category, name, field, value, index = "", controller_specific = "", section = "" }) {
-    return { source, category, name, field, value, index, controller_specific, section };
+  function makeParam({ source, category, name, field, value, index = "", controller_specific = "", section = "", context = "", hint = "" }) {
+    return {
+      source,
+      category,
+      name,
+      field,
+      value,
+      index,
+      controller_specific,
+      section: section || sectionForCategory(category),
+      context,
+      hint,
+      tier: OTHER_CATEGORIES.has(category) ? "other" : "primary",
+    };
+  }
+
+  function buildBlockIndex(doc) {
+    const index = new Map();
+    for (const el of doc.getElementsByTagName("*")) {
+      const id = el.getAttribute("id");
+      if (!id) continue;
+      index.set(id, {
+        tag: el.tagName,
+        name: textContent(el, "Name") || textContent(el, "NAME"),
+      });
+    }
+    return index;
+  }
+
+  function buildOutgoingLinks(doc) {
+    const links = new Map();
+    for (const link of doc.getElementsByTagName("Link")) {
+      const fb = link.getElementsByTagName("FB")[0]?.getAttribute("ref");
+      const tb = link.getElementsByTagName("TB")[0]?.getAttribute("ref");
+      const tp = textContent(link, "TP");
+      if (!fb || !tb) continue;
+      if (!links.has(fb)) links.set(fb, []);
+      links.get(fb).push({ targetId: tb, port: tp });
+    }
+    return links;
+  }
+
+  function describeConstantUsage(blockId, blockIndex, outgoingLinks) {
+    const targets = outgoingLinks.get(blockId) || [];
+    const parts = [];
+    const seen = new Set();
+    for (const { targetId, port } of targets) {
+      const target = blockIndex.get(targetId);
+      if (!target) continue;
+      const label = target.name ? `${target.name} (${target.tag})` : target.tag;
+      const full = port && !["Output", "Input"].includes(port) ? `${label} · port ${port}` : label;
+      if (seen.has(full)) continue;
+      seen.add(full);
+      parts.push(full);
+      if (parts.length >= 4) break;
+    }
+    return parts.join(" → ");
+  }
+
+  function inferConstantHint(value, usage) {
+    const numeric = Number(value);
+    const hints = [];
+    const usageLower = usage.toLowerCase();
+
+    if (usageLower.includes("start delay") || usageLower.includes("startdelay")) {
+      hints.push(`Start delay of ${value} (typically seconds)`);
+    }
+    if (usageLower.includes("min on off") || usageLower.includes("minofftime")) {
+      hints.push(`Minimum on/off time = ${value}`);
+    }
+    if (usageLower.includes("multiplexer")) {
+      hints.push(numeric === 1 ? "Multiplexer enable/select flag (1 = active)" : `Multiplexer input value ${value}`);
+    }
+    if (usageLower.includes("greaterthan") || usageLower.includes("lessthan") || usageLower.includes("equal")) {
+      hints.push(`Comparison threshold: ${value}`);
+    }
+    if (usageLower.includes("multiply") || usageLower.includes("divide") || usageLower.includes("subtract")) {
+      hints.push(`Math block factor/offset: ${value}`);
+    }
+    if (usageLower.includes("switch")) {
+      hints.push(numeric === 1 ? "Switch selector (1 = true/on path)" : `Switch value ${value}`);
+    }
+    if (numeric === 1 && !hints.length) {
+      hints.push("Logic flag (1 = enabled/true)");
+    }
+    if (!Number.isNaN(numeric) && numeric > 1 && numeric <= 120 && !hints.length) {
+      hints.push(`Likely a timer/delay (${value} sec or min — verify in EC-gfxProgram)`);
+    }
+    if (String(value).startsWith("0.1") || numeric === 0.1) {
+      hints.push("Fraction multiplier (0.1 = 10%)");
+    }
+    if (!hints.length && usage) {
+      hints.push(`Feeds: ${usage}`);
+    }
+    if (!hints.length) {
+      hints.push("Fixed number inside the programming sheet logic (not a named BACnet setpoint)");
+    }
+    return hints.join(". ");
+  }
+
+  function buildInternalConstantContext(blockId, value, blockIndex, outgoingLinks) {
+    const usage = describeConstantUsage(blockId, blockIndex, outgoingLinks);
+    const hint = inferConstantHint(value, usage);
+    return { usage, hint };
+  }
+
+  function isOtherCategory(category) {
+    return OTHER_CATEGORIES.has(category);
+  }
+
+  function readInternalConstantValue(block) {
+    const props = block.getElementsByTagName("Props")[0];
+    const valueEl = props?.getElementsByTagName("Value")[0];
+    const propsValue = valueEl?.textContent?.trim();
+    if (propsValue) {
+      return { value: propsValue, storage: "Props" };
+    }
+    const opv = textContent(block, "OPV");
+    if (opv) {
+      const first = opv.split("|")[0];
+      if (first !== "") {
+        return { value: first, storage: "OPV" };
+      }
+    }
+    return null;
+  }
+
+  function writeInternalConstantValue(block, doc, newValue) {
+    const current = readInternalConstantValue(block);
+    const oldValue = current?.value || "";
+
+    if (!current || current.storage === "OPV") {
+      let opvEl = block.getElementsByTagName("OPV")[0];
+      if (!opvEl) {
+        opvEl = doc.createElement("OPV");
+        block.appendChild(opvEl);
+        opvEl.textContent = `${newValue}|`;
+        return `OPV: -> ${newValue}`;
+      }
+      const parts = opvEl.textContent.split("|");
+      parts[0] = newValue;
+      opvEl.textContent = parts.join("|");
+      return oldValue !== newValue ? `OPV: ${oldValue} -> ${newValue}` : null;
+    }
+
+    let props = block.getElementsByTagName("Props")[0];
+    if (!props) {
+      props = doc.createElement("Props");
+      block.appendChild(props);
+    }
+    let elem = props.getElementsByTagName("Value")[0];
+    if (!elem) {
+      elem = doc.createElement("Value");
+      props.appendChild(elem);
+    }
+    if (elem.textContent?.trim() !== newValue) {
+      const prior = elem.textContent?.trim() || "";
+      elem.textContent = newValue;
+      return `Value: ${prior} -> ${newValue}`;
+    }
+    return null;
   }
 
   function sortParameters(parameters) {
@@ -184,7 +351,8 @@ const GfxCore = (() => {
   function parseMainXmlParameters(mainXmlText) {
     const doc = parseXml(mainXmlText);
     const parameters = [];
-    const internalConstantCounts = new Map();
+    const blockIndex = buildBlockIndex(doc);
+    const outgoingLinks = buildOutgoingLinks(doc);
 
     for (const block of doc.documentElement.children) {
       const tag = block.tagName;
@@ -302,20 +470,19 @@ const GfxCore = (() => {
         const blockId = block.getAttribute("id") || "unknown";
         const rawName = textContent(block, "Name", "");
         const baseName = rawName && rawName !== "Internal Constant" ? rawName : "LogicConstant";
-        const count = internalConstantCounts.get(baseName) || 0;
-        internalConstantCounts.set(baseName, count + 1);
         const name = `${baseName}#${blockId}`;
-        const props = block.getElementsByTagName("Props")[0];
-        const valueEl = props?.getElementsByTagName("Value")[0];
-        const value = valueEl?.textContent?.trim() || "";
-        if (!value) continue;
+        const read = readInternalConstantValue(block);
+        if (!read) continue;
+        const { usage, hint } = buildInternalConstantContext(blockId, read.value, blockIndex, outgoingLinks);
         parameters.push(
           makeParam({
             source: "Main.xml",
             category: "InternalConstant",
             name,
             field: "Value",
-            value,
+            value: read.value,
+            context: usage,
+            hint,
             section: sectionForCategory("InternalConstant"),
           }),
         );
@@ -545,21 +712,8 @@ const GfxCore = (() => {
         const name = `${baseName}#${blockId}`;
         const key = paramKey("Main.xml", "InternalConstant", name, "Value");
         if (!(key in updates)) continue;
-        let props = block.getElementsByTagName("Props")[0];
-        if (!props) {
-          props = doc.createElement("Props");
-          block.appendChild(props);
-        }
-        let elem = props.getElementsByTagName("Value")[0];
-        if (!elem) {
-          elem = doc.createElement("Value");
-          props.appendChild(elem);
-        }
-        const oldValue = elem.textContent?.trim() || "";
-        if (oldValue !== updates[key]) {
-          elem.textContent = updates[key];
-          changed.push(`InternalConstant.${name}.Value: ${oldValue} -> ${updates[key]}`);
-        }
+        const diff = writeInternalConstantValue(block, doc, updates[key]);
+        if (diff) changed.push(`InternalConstant.${name}.${diff}`);
       } else if (PROGRAMMING_CONSTANT_TAGS[tag]) {
         const blockId = block.getAttribute("id") || "unknown";
         const baseName = textContent(block, "Name") || `${tag}#${blockId}`;
@@ -760,7 +914,7 @@ const GfxCore = (() => {
   }
 
   function parametersToCsv(parameters) {
-    const header = "source,category,name,field,value,index,controller_specific,section";
+    const header = "source,category,name,field,value,index,controller_specific,section,context,tier";
     const lines = parameters.map((param) => {
       const cells = [
         param.source,
@@ -771,6 +925,8 @@ const GfxCore = (() => {
         param.index || "",
         param.controller_specific || "",
         param.section || "",
+        param.context || "",
+        param.tier || "",
       ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`);
       return cells.join(",");
     });
@@ -788,8 +944,10 @@ const GfxCore = (() => {
   return {
     COM_CONFIG_PATH,
     CATEGORY_SECTIONS,
+    OTHER_CATEGORIES,
     DEFAULT_VALUE_BLOCKS,
     BACNET_RESOURCE_TAGS,
+    isOtherCategory,
     paramKey,
     sectionForCategory,
     parseAllParameters,

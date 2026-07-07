@@ -79,6 +79,15 @@
         "Each row is one day/time slot with an occupancy state such as Occupied or Standby."
       ]
     },
+    "InternalConstant": {
+      "label": "Internal logic constant (programming sheet)",
+      "notes": [
+        "Not a named BACnet setpoint — a fixed number wired into logic blocks.",
+        "Value 1 often means enabled/true. Values like 15 or 30 are often timer delays in seconds.",
+        "Value 0.1 is a 10% multiplier. The app traces which block each constant feeds.",
+        "Only change these if you understand the logic in EC-gfxProgram."
+      ]
+    },
     "HardwareOutput": {
       "label": "Hardware output scaling and defaults",
       "notes": [
