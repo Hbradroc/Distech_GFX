@@ -227,6 +227,7 @@ button:disabled {
 }
 
 .parameter-section {
+  position: relative;
   width: min(1100px, 100%);
   margin: 0 auto 32px;
   padding: 0 24px;
@@ -266,6 +267,12 @@ button:disabled {
   word-break: break-word;
 }
 
+.parameter-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .help-wiring-link {
   margin: 12px 0 0;
   padding: 8px 12px;
@@ -277,40 +284,43 @@ button:disabled {
   box-shadow: 2px 2px 0 var(--ink);
 }
 
-.wiring-launch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 0 20px;
-  padding: 16px 18px;
-  background: #eef8f6;
+.wiring-launch-corner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 200;
+  width: min(280px, calc(100vw - 32px));
+  padding: 14px 16px;
+  background: var(--card);
   border: 2px solid var(--accent);
   border-radius: 14px;
+  box-shadow: 6px 6px 0 var(--ink);
 }
 
-.wiring-launch h3 {
+.wiring-launch-corner h3 {
   margin: 0 0 6px;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
-.wiring-launch p {
-  margin: 0;
-  font-size: 0.92rem;
-  color: var(--muted, #5c574d);
-  max-width: 52rem;
-  line-height: 1.45;
+.wiring-launch-corner p {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: rgba(22, 22, 22, 0.72);
+  line-height: 1.4;
 }
 
-.parameter-header-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.wiring-launch-corner button {
+  width: 100%;
 }
 
-.parameter-header-actions .wiring-open-btn {
-  white-space: nowrap;
+@media (max-width: 720px) {
+  .wiring-launch-corner {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
 }
 
 .generate-inline {

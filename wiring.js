@@ -1,4 +1,4 @@
-const WIRING_STORAGE_KEY = "distechGfxWiring";
+const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
 
 const wiringSubtitle = document.getElementById("wiringSubtitle");
 const wiringStats = document.getElementById("wiringStats");
@@ -27,13 +27,22 @@ function escapeHtml(text) {
 }
 
 function loadPayload() {
-  const raw = sessionStorage.getItem(WIRING_STORAGE_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
+  const params = new URLSearchParams(window.location.search);
+  const storageKey = params.get("key") || "";
+  const keysToTry = storageKey
+    ? [storageKey]
+    : [WIRING_STORAGE_PREFIX + "latest", "distechGfxWiring"];
+
+  for (const key of keysToTry) {
+    const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 function linkMatchesSearch(link, query) {
@@ -203,7 +212,7 @@ function init() {
   payload = loadPayload();
   if (!payload?.wiring) {
     document.body.innerHTML =
-      '<main style="padding:2rem;font-family:sans-serif"><h1>No wiring data</h1><p>Load a .gfx template in the main editor and click <strong>Open wiring viewer</strong>.</p></main>';
+      '<main style="padding:2rem;font-family:sans-serif;max-width:40rem"><h1>No wiring data</h1><p>Load a .gfx template in the main editor, then click <strong>Open wiring viewer</strong> again.</p><p>If you opened this page directly, go back to the editor first.</p></main>';
     return;
   }
 

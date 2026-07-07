@@ -1,6 +1,7 @@
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.5.1";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
+const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
 
 const gfxInput = document.getElementById("gfxFile");
 const loadBtn = document.getElementById("loadBtn");
@@ -8,7 +9,6 @@ const generateBtn = document.getElementById("generateBtn");
 const generateBtnInline = document.getElementById("generateBtnInline");
 const exportCsvBtn = document.getElementById("exportCsvBtn");
 const openWiringBtn = document.getElementById("openWiringBtn");
-const openWiringBtnInline = document.getElementById("openWiringBtnInline");
 const wiringLaunch = document.getElementById("wiringLaunch");
 const wiringLaunchText = document.getElementById("wiringLaunchText");
 const readyHint = document.getElementById("readyHint");
@@ -69,7 +69,6 @@ function resetState() {
   generateBtn.disabled = true;
   exportCsvBtn.disabled = true;
   if (openWiringBtn) openWiringBtn.disabled = true;
-  if (openWiringBtnInline) openWiringBtnInline.disabled = true;
   if (wiringLaunch) wiringLaunch.hidden = true;
   readyHint.hidden = true;
   parameterSection.hidden = true;
@@ -422,13 +421,32 @@ function openWiringViewer(focusBlockId = "") {
     focusBlockId: focusBlockId || "",
     wiring: appState.wiringGraph,
   };
-  sessionStorage.setItem("distechGfxWiring", JSON.stringify(payload));
-  const url = `wiring.html?v=${APP_VERSION}`;
-  const popup = window.open(url, "distechGfxWiring", "noopener,noreferrer,width=1280,height=900");
-  if (!popup) {
-    log("Popup blocked — allow popups for this site, or open wiring.html after loading a template.");
-    window.location.href = url;
+
+  const storageKey = `${WIRING_STORAGE_PREFIX}${Date.now()}`;
+  let serialized = "";
+  try {
+    serialized = JSON.stringify(payload);
+    localStorage.setItem(storageKey, serialized);
+    localStorage.setItem(`${WIRING_STORAGE_PREFIX}latest`, serialized);
+  } catch (error) {
+    log(`Could not store wiring data (${error.message}). Try closing other tabs for this site.`);
+    return;
   }
+
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(WIRING_STORAGE_PREFIX) && key !== storageKey && key !== `${WIRING_STORAGE_PREFIX}latest`) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  const url = `wiring.html?v=${APP_VERSION}&key=${encodeURIComponent(storageKey)}`;
+  const popup = window.open(url, "_blank", "width=1280,height=900");
+  if (!popup) {
+    log("Popup blocked — allow popups for this site, then click Open wiring viewer again.");
+    return;
+  }
+  popup.focus();
 }
 
 function blockIdFromParam(param) {
@@ -477,10 +495,9 @@ async function loadTemplate() {
     generateBtn.disabled = false;
     exportCsvBtn.disabled = false;
     if (openWiringBtn) openWiringBtn.disabled = false;
-    if (openWiringBtnInline) openWiringBtnInline.disabled = false;
     if (wiringLaunch) wiringLaunch.hidden = false;
     if (wiringLaunchText && archive.wiringGraph) {
-      wiringLaunchText.textContent = `${archive.wiringGraph.linkCount} connections across ${archive.wiringGraph.compositeCount} logic modules — opens in a new window. Filter, focus one block, then Print / Save PDF.`;
+      wiringLaunchText.textContent = `${archive.wiringGraph.linkCount} connections · ${archive.wiringGraph.compositeCount} modules`;
     }
 
     renderParameterList();
@@ -514,7 +531,6 @@ generateBtn.addEventListener("click", generateGfx);
 generateBtnInline.addEventListener("click", generateGfx);
 exportCsvBtn.addEventListener("click", exportCsv);
 if (openWiringBtn) openWiringBtn.addEventListener("click", () => openWiringViewer());
-if (openWiringBtnInline) openWiringBtnInline.addEventListener("click", () => openWiringViewer());
 editorHelp.addEventListener("click", (event) => {
   const btn = event.target.closest(".help-wiring-link");
   if (!btn) return;
