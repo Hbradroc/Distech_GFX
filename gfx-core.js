@@ -1590,6 +1590,310 @@ const GfxCore = (() => {
     return counts;
   }
 
+  const WIRING_IDB_NAME = "distechGfxWiring";
+  const WIRING_IDB_STORE = "payloads";
+  const WIRING_LOCAL_BYTE_LIMIT = 1_800_000;
+
+  function labelFromBlockMeta(meta, blockId) {
+    if (!meta) return `Block#${blockId}`;
+    const name = sanitizeDisplayText(meta.n, "");
+    const tag = meta.t || "?";
+    if (name && !["Internal Constant", "Monitor"].includes(name)) {
+      return name.includes(tag) ? name : `${name} (${tag})`;
+    }
+    if (tag === "InternalConstantNumeric") return `LogicConstant#${blockId}`;
+    return `${tag}#${blockId}`;
+  }
+
+  function registerBlockMeta(registry, id, tag, name, sheet, tagName) {
+    if (!id) return;
+    const existing = registry[id];
+    if (!existing) {
+      registry[id] = { t: tag || "?", n: name || "", s: sheet || "", g: tagName || "" };
+      return;
+    }
+    if (tag && existing.t === "?") existing.t = tag;
+    if (name && !existing.n) existing.n = name;
+    if (sheet && !existing.s) existing.s = sheet;
+    if (tagName && !existing.g) existing.g = tagName;
+  }
+
+  function compactWiringForViewer(wiring) {
+    const blocks = {};
+    for (const link of wiring.links || []) {
+      registerBlockMeta(blocks, link.from.id, link.from.tag, link.from.name, link.from.sheet);
+      registerBlockMeta(blocks, link.to.id, link.to.tag, link.to.name, link.to.sheet);
+    }
+    for (const sheet of wiring.sheetDiagrams || []) {
+      for (const block of sheet.blocks || []) {
+        registerBlockMeta(blocks, block.id, block.tag, block.name, sheet.name, block.tagName);
+      }
+    }
+
+    return {
+      _c: 1,
+      blocks,
+      links: (wiring.links || []).map((link) => [
+        link.from.id,
+        link.from.port || "",
+        link.to.id,
+        link.to.port || "",
+      ]),
+      crossReferences: wiring.crossReferences || [],
+      composites: (wiring.composites || []).map((composite) => [composite.id, composite.name, composite.sheet || ""]),
+      sheets: wiring.sheets || [],
+      blockTypes: wiring.blockTypes || [],
+      sheetDiagrams: (wiring.sheetDiagrams || []).map((sheet) => ({
+        i: sheet.docId,
+        n: sheet.name,
+        b: sheet.bounds,
+        k: (sheet.blocks || []).map((block) => [block.id, block.category, block.x, block.y, block.w, block.h]),
+        l: (sheet.links || []).map((link) => [link.fromId, link.fromPort || "", link.toId, link.toPort || ""]),
+      })),
+      blockCount: wiring.blockCount || 0,
+      linkCount: wiring.linkCount || 0,
+      compositeCount: wiring.compositeCount || 0,
+      sheetDiagramCount: wiring.sheetDiagramCount || 0,
+      crossRefCount: wiring.crossRefCount || 0,
+      hubCount: wiring.hubCount || 0,
+      targetCount: wiring.targetCount || 0,
+    };
+  }
+
+  function isCompactWiring(wiring) {
+    return Boolean(wiring && wiring._c === 1);
+  }
+
+  function expandWiringForViewer(compact) {
+    if (!compact) return compact;
+    if (!isCompactWiring(compact)) return compact;
+
+    const blocks = compact.blocks || {};
+    function endpoint(id, port) {
+      const meta = blocks[id] || { t: "?", n: "", s: "", g: "" };
+      return {
+        id,
+        tag: meta.t,
+        name: meta.n,
+        label: labelFromBlockMeta(meta, id),
+        port: port || "",
+        sheet: meta.s || "",
+      };
+    }
+
+    const links = (compact.links || []).map(([fromId, fromPort, toId, toPort]) => ({
+      id: "",
+      from: endpoint(fromId, fromPort),
+      to: endpoint(toId, toPort),
+    }));
+
+    const focusBlocks = new Map();
+    for (const wire of links) {
+      focusBlocks.set(wire.from.id, wire.from.label);
+      focusBlocks.set(wire.to.id, wire.to.label);
+    }
+    const focusOptions = [...focusBlocks.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    const composites = (compact.composites || []).map(([id, name, sheet]) => ({
+      id,
+      name,
+      label: `${name} (${id})`,
+      sheet,
+    }));
+
+    const sheetDiagrams = (compact.sheetDiagrams || []).map((sheet) => {
+      const sheetBlocks = (sheet.k || []).map(([id, category, x, y, w, h]) => {
+        const meta = blocks[id] || { t: "?", n: "", g: "" };
+        return {
+          id,
+          tag: meta.t,
+          name: meta.n,
+          tagName: meta.g || "",
+          label: labelFromBlockMeta(meta, id),
+          category,
+          x,
+          y,
+          w,
+          h,
+          cx: x + w / 2,
+          cy: y + h / 2,
+        };
+      });
+      const sheetLinks = (sheet.l || []).map(([fromId, fromPort, toId, toPort]) => ({
+        fromId,
+        toId,
+        fromPort,
+        toPort,
+      }));
+      return {
+        docId: sheet.i,
+        name: sheet.n,
+        bounds: sheet.b,
+        blockCount: sheetBlocks.length,
+        linkCount: sheetLinks.length,
+        blocks: sheetBlocks,
+        links: sheetLinks,
+      };
+    });
+
+    return {
+      links,
+      composites,
+      focusOptions,
+      blockTypes: compact.blockTypes || [],
+      sheets: compact.sheets || [],
+      crossReferences: compact.crossReferences || [],
+      sheetDiagrams,
+      blockCount: compact.blockCount || 0,
+      linkCount: compact.linkCount || links.length,
+      compositeCount: compact.compositeCount || composites.length,
+      sheetDiagramCount: compact.sheetDiagramCount || sheetDiagrams.length,
+      crossRefCount: compact.crossRefCount || 0,
+      hubCount: compact.hubCount || 0,
+      targetCount: compact.targetCount || 0,
+    };
+  }
+
+  function openWiringDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(WIRING_IDB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(WIRING_IDB_STORE)) {
+          db.createObjectStore(WIRING_IDB_STORE);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function idbRequest(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function idbGet(key) {
+    const db = await openWiringDb();
+    try {
+      const tx = db.transaction(WIRING_IDB_STORE, "readonly");
+      return await idbRequest(tx.objectStore(WIRING_IDB_STORE).get(key));
+    } finally {
+      db.close();
+    }
+  }
+
+  async function idbSet(key, value) {
+    const db = await openWiringDb();
+    try {
+      const tx = db.transaction(WIRING_IDB_STORE, "readwrite");
+      tx.objectStore(WIRING_IDB_STORE).put(value, key);
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function pruneWiringStorage(prefix, keepKey) {
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix) && key !== keepKey) {
+        localStorage.removeItem(key);
+      }
+    }
+
+    if (typeof indexedDB === "undefined") return;
+    const db = await openWiringDb();
+    try {
+      const tx = db.transaction(WIRING_IDB_STORE, "readwrite");
+      const store = tx.objectStore(WIRING_IDB_STORE);
+      const keys = await idbRequest(store.getAllKeys());
+      for (const key of keys) {
+        const keyText = String(key);
+        if (keyText.startsWith(prefix) && keyText !== keepKey) {
+          store.delete(key);
+        }
+      }
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function saveWiringViewerPayload(storageKey, payload, prefix) {
+    const slim = {
+      ...payload,
+      wiring: compactWiringForViewer(payload.wiring),
+    };
+    const json = JSON.stringify(slim);
+    const sizeMb = (json.length / (1024 * 1024)).toFixed(1);
+
+    if (json.length <= WIRING_LOCAL_BYTE_LIMIT) {
+      try {
+        localStorage.setItem(storageKey, json);
+        await pruneWiringStorage(prefix, storageKey);
+        return { storage: "local", bytes: json.length, sizeMb };
+      } catch {
+        // Fall through to IndexedDB for quota errors on large-but-under-limit payloads.
+      }
+    }
+
+    if (typeof indexedDB === "undefined") {
+      throw new Error(`Wiring data is ${sizeMb} MB — browser storage is full. Close other tabs for this site.`);
+    }
+
+    await idbSet(storageKey, json);
+    localStorage.removeItem(storageKey);
+    await pruneWiringStorage(prefix, storageKey);
+    return { storage: "idb", bytes: json.length, sizeMb };
+  }
+
+  async function loadWiringViewerPayload(storageKey, prefix, preferIdb = false) {
+    const keysToTry = storageKey ? [storageKey] : [`${prefix}latest`];
+
+    for (const key of keysToTry) {
+      const readers = preferIdb
+        ? [
+            async () => idbGet(key),
+            async () => localStorage.getItem(key),
+          ]
+        : [
+            async () => localStorage.getItem(key),
+            async () => idbGet(key),
+          ];
+
+      for (const read of readers) {
+        let raw = null;
+        try {
+          raw = await read();
+        } catch {
+          continue;
+        }
+        if (!raw) continue;
+        try {
+          const payload = JSON.parse(raw);
+          if (payload.wiring) {
+            payload.wiring = expandWiringForViewer(payload.wiring);
+          }
+          return payload;
+        } catch {
+          continue;
+        }
+      }
+    }
+    return null;
+  }
+
   return {
     COM_CONFIG_PATH,
     CATEGORY_SECTIONS,
@@ -1616,6 +1920,10 @@ const GfxCore = (() => {
     buildModifiedGfx,
     parametersToCsv,
     countByCategory,
+    compactWiringForViewer,
+    expandWiringForViewer,
+    saveWiringViewerPayload,
+    loadWiringViewerPayload,
   };
 })();
 

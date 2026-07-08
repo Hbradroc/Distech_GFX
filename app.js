@@ -1,4 +1,4 @@
-const APP_VERSION = "1.8.2";
+const APP_VERSION = "1.8.3";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -455,7 +455,7 @@ function renderSignalFlowHelp(param) {
     </div>`;
 }
 
-function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortName = "") {
+async function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortName = "") {
   if (!appState.wiringGraph) {
     log("Load a template first to view wiring.");
     return;
@@ -471,30 +471,23 @@ function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortName = 
   };
 
   const storageKey = `${WIRING_STORAGE_PREFIX}${Date.now()}`;
-  let serialized = "";
+  let storageResult;
   try {
-    serialized = JSON.stringify(payload);
-    localStorage.setItem(storageKey, serialized);
-    localStorage.setItem(`${WIRING_STORAGE_PREFIX}latest`, serialized);
+    storageResult = await GfxCore.saveWiringViewerPayload(storageKey, payload, WIRING_STORAGE_PREFIX);
   } catch (error) {
-    log(`Could not store wiring data (${error.message}). Try closing other tabs for this site.`);
+    log(`Could not store wiring data (${error.message})`);
     return;
   }
 
-  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(WIRING_STORAGE_PREFIX) && key !== storageKey && key !== `${WIRING_STORAGE_PREFIX}latest`) {
-      localStorage.removeItem(key);
-    }
-  }
-
-  const url = `wiring.html?v=${APP_VERSION}&key=${encodeURIComponent(storageKey)}`;
+  const storeParam = storageResult.storage === "idb" ? "&store=idb" : "";
+  const url = `wiring.html?v=${APP_VERSION}&key=${encodeURIComponent(storageKey)}${storeParam}`;
   const popup = window.open(url, "_blank", "width=1280,height=900");
   if (!popup) {
     log("Popup blocked — allow popups for this site, then click Open wiring viewer again.");
     return;
   }
   popup.focus();
+  log(`Wiring viewer opened (${storageResult.sizeMb} MB).`);
 }
 
 function blockIdFromParam(param) {

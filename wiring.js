@@ -68,18 +68,27 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function loadPayload() {
+async function loadPayload() {
   const params = new URLSearchParams(window.location.search);
   const storageKey = params.get("key") || "";
-  const keysToTry = storageKey
-    ? [storageKey]
-    : [`${WIRING_STORAGE_PREFIX}latest`, "distechGfxWiring"];
+  const preferIdb = params.get("store") === "idb";
+  const gfx = window.GfxCore;
 
+  if (gfx?.loadWiringViewerPayload) {
+    const payload = await gfx.loadWiringViewerPayload(storageKey, WIRING_STORAGE_PREFIX, preferIdb);
+    if (payload) return payload;
+  }
+
+  const keysToTry = storageKey ? [storageKey] : [`${WIRING_STORAGE_PREFIX}latest`, "distechGfxWiring"];
   for (const key of keysToTry) {
     const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
     if (!raw) continue;
     try {
-      return JSON.parse(raw);
+      const payload = JSON.parse(raw);
+      if (gfx?.expandWiringForViewer && payload.wiring) {
+        payload.wiring = gfx.expandWiringForViewer(payload.wiring);
+      }
+      return payload;
     } catch {
       continue;
     }
@@ -867,8 +876,8 @@ function populateFilters() {
   applyInitialFocus();
 }
 
-function init() {
-  payload = loadPayload();
+async function init() {
+  payload = await loadPayload();
   if (!payload?.wiring) {
     document.body.innerHTML =
       '<main style="padding:2rem;font-family:sans-serif;max-width:40rem"><h1>No logic data</h1><p>Load a .gfx template in the main editor, then click <strong>Open wiring viewer</strong> again.</p></main>';
