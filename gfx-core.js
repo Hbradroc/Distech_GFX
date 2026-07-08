@@ -1894,6 +1894,164 @@ const GfxCore = (() => {
     return null;
   }
 
+  const UTILITY_STUB_PATTERN =
+    /\b(valid|validated|validation|backup|connected|connectivity|monitor|spare|dummy|fault|fail|failed|inhibit|alarm|interlock|outofservice|out_of_service)\b/i;
+
+  const UTILITY_ROLE_HELP = {
+    dead_output: "Input is wired in but the output goes nowhere — often backup validation or an unfinished branch.",
+    no_effect_path: "Not on any path to hardware output or a shared reference tag — no effect on real control.",
+    validation_name: "Block name suggests input validation, fault handling, or backup logic.",
+    monitor: "Monitor block — usually watches a signal without driving control outputs.",
+    isolated: "Not connected to any wires on the project.",
+    bacnet_sidecar: "BACnet mapping/register block — may be intentional metadata, not main control logic.",
+  };
+
+  function buildWiringBlockMeta(wiring) {
+    const meta = new Map();
+    function ingest(id, tag, name, label, sheet, tagName = "") {
+      if (!id) return;
+      const existing = meta.get(id);
+      if (!existing) {
+        meta.set(id, {
+          id,
+          tag: tag || "?",
+          name: name || "",
+          label: label || "",
+          sheet: sheet || "",
+          tagName: tagName || "",
+        });
+        return;
+      }
+      if (tag && existing.tag === "?") existing.tag = tag;
+      if (name && !existing.name) existing.name = name;
+      if (label && !existing.label) existing.label = label;
+      if (sheet && !existing.sheet) existing.sheet = sheet;
+      if (tagName && !existing.tagName) existing.tagName = tagName;
+    }
+
+    for (const link of wiring.links || []) {
+      ingest(link.from.id, link.from.tag, link.from.name, link.from.label, link.from.sheet);
+      ingest(link.to.id, link.to.tag, link.to.name, link.to.label, link.to.sheet);
+    }
+    for (const sheet of wiring.sheetDiagrams || []) {
+      for (const block of sheet.blocks || []) {
+        ingest(block.id, block.tag, block.name, block.label, sheet.name, block.tagName);
+      }
+    }
+    return meta;
+  }
+
+  function isControlEffectSink(tag) {
+    if (tag === "OutgoingTag") return true;
+    if (tag.includes("HardwareOutput")) return true;
+    return false;
+  }
+
+  function isBenignSourceTag(tag) {
+    return tag === "IncomingTag" || tag === "InternalConstantNumeric";
+  }
+
+  function isBacnetSidecarTag(tag) {
+    return tag.includes("SmartVue") || tag.includes("BacnetRegister") || tag === "BacnetSmartVueCondition";
+  }
+
+  function scoreUtilityRoles(roles) {
+    const weights = {
+      isolated: 4,
+      dead_output: 3,
+      no_effect_path: 2,
+      validation_name: 2,
+      monitor: 2,
+      bacnet_sidecar: 1,
+    };
+    return roles.reduce((sum, role) => sum + (weights[role] || 1), 0);
+  }
+
+  function analyzeNonFunctionalBlocks(wiring) {
+    if (!wiring?.links?.length) {
+      return { entries: [], summary: { total: 0, highConfidence: 0, monitor: 0, deadOutput: 0 } };
+    }
+
+    const meta = buildWiringBlockMeta(wiring);
+    const outgoing = new Map();
+    const incoming = new Map();
+    const blockIds = new Set();
+
+    for (const link of wiring.links) {
+      blockIds.add(link.from.id);
+      blockIds.add(link.to.id);
+      if (!outgoing.has(link.from.id)) outgoing.set(link.from.id, []);
+      if (!incoming.has(link.to.id)) incoming.set(link.to.id, []);
+      outgoing.get(link.from.id).push(link);
+      incoming.get(link.to.id).push(link);
+    }
+
+    const reachesEffect = new Set();
+    const queue = [...blockIds].filter((id) => isControlEffectSink(meta.get(id)?.tag || ""));
+    for (const id of queue) reachesEffect.add(id);
+    while (queue.length) {
+      const id = queue.shift();
+      for (const link of incoming.get(id) || []) {
+        if (!reachesEffect.has(link.from.id)) {
+          reachesEffect.add(link.from.id);
+          queue.push(link.from.id);
+        }
+      }
+    }
+
+    const entries = [];
+    for (const id of blockIds) {
+      const block = meta.get(id) || { id, tag: "?", name: "", label: `Block#${id}`, sheet: "", tagName: "" };
+      const inCount = (incoming.get(id) || []).length;
+      const outCount = (outgoing.get(id) || []).length;
+      const roles = [];
+      const haystack = `${block.name} ${block.tagName} ${block.label}`;
+
+      if (inCount === 0 && outCount === 0) roles.push("isolated");
+      if (outCount === 0 && !isControlEffectSink(block.tag)) roles.push("dead_output");
+      if (!reachesEffect.has(id) && !isBenignSourceTag(block.tag)) roles.push("no_effect_path");
+      if (UTILITY_STUB_PATTERN.test(haystack)) roles.push("validation_name");
+      if (block.tag === "Monitor" || block.name === "Monitor") roles.push("monitor");
+      if (roles.includes("dead_output") && isBacnetSidecarTag(block.tag)) roles.push("bacnet_sidecar");
+
+      if (!roles.length) continue;
+
+      const score = scoreUtilityRoles(roles);
+      const confidence = score >= 5 ? "high" : score >= 3 ? "medium" : "low";
+      const displayName = sanitizeDisplayText(
+        block.tagName || block.name || block.label,
+        labelFromBlockMeta({ t: block.tag, n: block.name, g: block.tagName }, id),
+      );
+
+      entries.push({
+        blockId: id,
+        tag: block.tag,
+        name: displayName,
+        sheet: block.sheet || "—",
+        roles,
+        roleHelp: roles.map((role) => UTILITY_ROLE_HELP[role] || role),
+        score,
+        confidence,
+        inputCount: inCount,
+        outputCount: outCount,
+        likelyBackup: roles.includes("monitor") || (roles.includes("dead_output") && roles.includes("no_effect_path")),
+      });
+    }
+
+    entries.sort((a, b) => b.score - a.score || a.sheet.localeCompare(b.sheet) || a.name.localeCompare(b.name));
+
+    return {
+      entries,
+      summary: {
+        total: entries.length,
+        highConfidence: entries.filter((entry) => entry.confidence === "high").length,
+        monitor: entries.filter((entry) => entry.roles.includes("monitor")).length,
+        deadOutput: entries.filter((entry) => entry.roles.includes("dead_output")).length,
+        likelyBackup: entries.filter((entry) => entry.likelyBackup).length,
+      },
+    };
+  }
+
   return {
     COM_CONFIG_PATH,
     CATEGORY_SECTIONS,
@@ -1924,6 +2082,8 @@ const GfxCore = (() => {
     expandWiringForViewer,
     saveWiringViewerPayload,
     loadWiringViewerPayload,
+    analyzeNonFunctionalBlocks,
+    UTILITY_ROLE_HELP,
   };
 })();
 

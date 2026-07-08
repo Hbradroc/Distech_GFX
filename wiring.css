@@ -484,8 +484,20 @@ button:active {
   margin-top: 8px;
 }
 
-.diagram-focus {
-  margin-top: 16px;
+.audit-row {
+  cursor: pointer;
+}
+
+.audit-row.selected td {
+  background: #fee2e2;
+}
+
+.audit-row:hover td {
+  background: #fef2f2;
+}
+
+.diagram-block.audit-flag rect {
+  stroke-dasharray: 4 2;
 }
 
 .xref-focus-grid {

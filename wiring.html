@@ -7,9 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="wiring.css?v=1.8.3" />
-    <script defer src="gfx-core.js?v=1.8.3"></script>
-    <script defer src="wiring.js?v=1.8.3"></script>
+    <link rel="stylesheet" href="wiring.css?v=1.9.0" />
+    <script defer src="gfx-core.js?v=1.9.0"></script>
+    <script defer src="wiring.js?v=1.9.0"></script>
   </head>
   <body>
     <header class="wiring-toolbar no-print">
@@ -36,6 +36,7 @@
         <button type="button" id="tabDiagram" class="wiring-tab" role="tab" aria-selected="false">Block diagram</button>
         <button type="button" id="tabCrossRef" class="wiring-tab" role="tab" aria-selected="false">Cross-references</button>
         <button type="button" id="tabWiring" class="wiring-tab" role="tab" aria-selected="false">Sheet wiring</button>
+        <button type="button" id="tabAudit" class="wiring-tab" role="tab" aria-selected="false">Logic audit</button>
       </div>
 
       <section id="flowPanel" class="wiring-panel">
@@ -63,6 +64,10 @@
           <label class="wiring-toggle">
             <input type="checkbox" id="diagramShowLabels" />
             Show labels on small blocks
+          </label>
+          <label class="wiring-toggle">
+            <input type="checkbox" id="diagramAuditOnly" />
+            Highlight audit flags
           </label>
         </div>
         <div class="diagram-legend no-print">
@@ -133,6 +138,41 @@
             <tbody id="wiringTableBody"></tbody>
           </table>
           <p id="wiringEmpty" class="wiring-empty" hidden>No connections match the current filters.</p>
+        </div>
+      </section>
+
+      <section id="auditPanel" class="wiring-panel" hidden>
+        <p class="diagram-help no-print">
+          Blocks listed here are wired in but do not drive hardware outputs or shared tags — common for
+          <strong>Monitor</strong> blocks, input-valid/connected checks, and backup branches left by the template author.
+        </p>
+        <div class="wiring-controls no-print" aria-label="Logic audit filters">
+          <select id="auditConfidence" aria-label="Minimum confidence">
+            <option value="low">All flagged blocks</option>
+            <option value="medium" selected>Medium+ confidence</option>
+            <option value="high">High confidence only</option>
+          </select>
+          <select id="auditSheet" aria-label="Filter by sheet">
+            <option value="">All sheets</option>
+          </select>
+          <label class="wiring-toggle">
+            <input type="checkbox" id="auditBackupOnly" />
+            Likely backup / Monitor only
+          </label>
+        </div>
+        <div class="wiring-table-wrap">
+          <table class="wiring-table" id="auditTable">
+            <thead>
+              <tr>
+                <th>Block</th>
+                <th>Sheet</th>
+                <th>Why flagged</th>
+                <th>Wires in/out</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+          <p id="auditEmpty" class="wiring-empty" hidden>No blocks match the current audit filters.</p>
         </div>
       </section>
 

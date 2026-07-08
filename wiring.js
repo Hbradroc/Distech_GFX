@@ -8,10 +8,19 @@ const tabFlow = document.getElementById("tabFlow");
 const tabDiagram = document.getElementById("tabDiagram");
 const tabCrossRef = document.getElementById("tabCrossRef");
 const tabWiring = document.getElementById("tabWiring");
+const tabAudit = document.getElementById("tabAudit");
 const flowPanel = document.getElementById("flowPanel");
 const diagramPanel = document.getElementById("diagramPanel");
 const crossRefPanel = document.getElementById("crossRefPanel");
 const wiringPanel = document.getElementById("wiringPanel");
+const auditPanel = document.getElementById("auditPanel");
+const auditConfidence = document.getElementById("auditConfidence");
+const auditSheet = document.getElementById("auditSheet");
+const auditBackupOnly = document.getElementById("auditBackupOnly");
+const auditTableBody = document.getElementById("auditTableBody");
+const auditEmpty = document.getElementById("auditEmpty");
+const auditTable = document.getElementById("auditTable");
+const diagramAuditOnly = document.getElementById("diagramAuditOnly");
 const flowSheet = document.getElementById("flowSheet");
 const flowBlock = document.getElementById("flowBlock");
 const flowPort = document.getElementById("flowPort");
@@ -46,6 +55,10 @@ let selectedXrefTag = "";
 let selectedBlockId = "";
 let selectedPortName = "";
 let diagramScale = 1;
+let logicAudit = null;
+let selectedAuditBlockId = "";
+
+const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
 
 const core = () => window.GfxCore || {};
 
@@ -94,6 +107,79 @@ async function loadPayload() {
     }
   }
   return null;
+}
+
+function refreshLogicAudit() {
+  const gfx = core();
+  logicAudit = gfx.analyzeNonFunctionalBlocks ? gfx.analyzeNonFunctionalBlocks(payload.wiring) : { entries: [], summary: {} };
+}
+
+function getFilteredAuditEntries() {
+  const minRank = CONFIDENCE_RANK[auditConfidence.value] ?? 1;
+  const sheet = auditSheet.value;
+  const backupOnly = auditBackupOnly.checked;
+  return (logicAudit?.entries || []).filter((entry) => {
+    if ((CONFIDENCE_RANK[entry.confidence] ?? 0) < minRank) return false;
+    if (sheet && entry.sheet !== sheet) return false;
+    if (backupOnly && !entry.likelyBackup) return false;
+    return true;
+  });
+}
+
+function auditBlockIdsOnSheet(sheetName) {
+  const ids = new Set();
+  for (const entry of getFilteredAuditEntries()) {
+    if (!sheetName || entry.sheet === sheetName) ids.add(entry.blockId);
+  }
+  return ids;
+}
+
+function formatAuditRoles(entry) {
+  const gfx = core();
+  const help = gfx.UTILITY_ROLE_HELP || {};
+  const labels = {
+    dead_output: "Dead output",
+    no_effect_path: "No control path",
+    validation_name: "Validation name",
+    monitor: "Monitor",
+    isolated: "Isolated",
+    bacnet_sidecar: "BACnet sidecar",
+  };
+  return entry.roles.map((role) => labels[role] || role).join(", ");
+}
+
+function renderAuditTable() {
+  const rows = getFilteredAuditEntries();
+  auditTableBody.innerHTML = rows
+    .map((entry) => {
+      const selected = entry.blockId === selectedAuditBlockId ? " selected" : "";
+      const why = formatAuditRoles(entry);
+      const hint = entry.roleHelp[0] ? `<br><small>${escapeHtml(entry.roleHelp[0])}</small>` : "";
+      return `
+      <tr class="audit-row${selected}" data-block-id="${escapeHtml(entry.blockId)}" data-sheet="${escapeHtml(entry.sheet)}">
+        <td><strong>${escapeHtml(entry.name)}</strong><br><small>${escapeHtml(friendlyBlockType(entry.tag))} · ${escapeHtml(entry.confidence)} confidence</small>${hint}</td>
+        <td>${escapeHtml(entry.sheet)}</td>
+        <td>${escapeHtml(why)}</td>
+        <td>${entry.inputCount} in · ${entry.outputCount} out</td>
+      </tr>`;
+    })
+    .join("");
+  auditEmpty.hidden = rows.length > 0;
+  auditTable.hidden = rows.length === 0;
+  if (activeTab === "audit" && logicAudit?.summary) {
+    const s = logicAudit.summary;
+    wiringStats.textContent = `${rows.length} shown · ${s.likelyBackup || 0} likely backup/Monitor · ${s.highConfidence || 0} high-confidence flags in project`;
+  }
+}
+
+function populateAuditSheets() {
+  const sheets = [...new Set((logicAudit?.entries || []).map((entry) => entry.sheet).filter(Boolean))].sort();
+  for (const sheet of sheets) {
+    const option = document.createElement("option");
+    option.value = sheet;
+    option.textContent = sheet;
+    auditSheet.appendChild(option);
+  }
 }
 
 function formatSites(entries) {
@@ -717,8 +803,12 @@ function renderSheetDiagram() {
   let blocksSvg = "";
   for (const block of sheet.blocks) {
     const colors = CATEGORY_COLORS[block.category] || CATEGORY_COLORS.logic;
+    const auditIds = diagramAuditOnly.checked ? auditBlockIdsOnSheet(sheet.name) : null;
+    const isAuditFlag = auditIds?.has(block.id);
     const highlighted =
       block.id === selectedBlockId ||
+      block.id === selectedAuditBlockId ||
+      isAuditFlag ||
       blockMatchesHighlight(block, query);
     const display = blockDisplayLabels(block);
     const showLabels =
@@ -727,9 +817,9 @@ function renderSheetDiagram() {
       (!query && (block.w >= 64 && block.h >= 28));
     const labelSvg = buildBlockLabelSvg(block, display, showLabels);
     blocksSvg += `
-      <g class="diagram-block${highlighted ? " highlighted" : ""}" data-block-id="${escapeHtml(block.id)}" role="button" tabindex="0" style="cursor:pointer">
+      <g class="diagram-block${highlighted ? " highlighted" : ""}${isAuditFlag ? " audit-flag" : ""}" data-block-id="${escapeHtml(block.id)}" role="button" tabindex="0" style="cursor:pointer">
         <rect x="${block.x}" y="${block.y}" width="${block.w}" height="${block.h}" rx="5"
-          fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="${highlighted ? 2.8 : 1.4}" />
+          fill="${colors.fill}" stroke="${isAuditFlag ? "#dc2626" : colors.stroke}" stroke-width="${highlighted ? 2.8 : isAuditFlag ? 2.2 : 1.4}" />
         ${labelSvg}
       </g>`;
   }
@@ -751,14 +841,17 @@ function setActiveTab(tab) {
   tabDiagram.classList.toggle("active", tab === "diagram");
   tabCrossRef.classList.toggle("active", tab === "xref");
   tabWiring.classList.toggle("active", tab === "wiring");
+  tabAudit.classList.toggle("active", tab === "audit");
   tabFlow.setAttribute("aria-selected", String(tab === "flow"));
   tabDiagram.setAttribute("aria-selected", String(tab === "diagram"));
   tabCrossRef.setAttribute("aria-selected", String(tab === "xref"));
   tabWiring.setAttribute("aria-selected", String(tab === "wiring"));
+  tabAudit.setAttribute("aria-selected", String(tab === "audit"));
   flowPanel.hidden = tab !== "flow";
   diagramPanel.hidden = tab !== "diagram";
   crossRefPanel.hidden = tab !== "xref";
   wiringPanel.hidden = tab !== "wiring";
+  auditPanel.hidden = tab !== "audit";
   renderStats();
 }
 
@@ -782,6 +875,8 @@ function renderStats() {
   } else if (activeTab === "xref") {
     const shown = getFilteredCrossRefs().length;
     wiringStats.textContent = `Showing ${shown} of ${w.crossRefCount || 0} tags · ${w.hubCount || 0} hubs · ${w.targetCount || 0} targets`;
+  } else if (activeTab === "audit") {
+    // renderAuditTable sets stats
   } else {
     const shown = getFilteredLinks().length;
     wiringStats.textContent = `Showing ${shown} of ${w.linkCount} local wire connections · ${w.compositeCount} logic modules`;
@@ -791,6 +886,8 @@ function renderStats() {
 function render() {
   if (activeTab === "flow") {
     renderSignalFlow(flowBlock.value, flowPort.value);
+  } else if (activeTab === "audit") {
+    renderAuditTable();
   } else if (activeTab === "diagram") {
     renderSheetDiagram();
   } else if (activeTab === "xref") {
@@ -891,6 +988,8 @@ async function init() {
   printMeta.textContent = `Exported ${new Date(payload.exportedAt).toLocaleString()} · ${payload.wiring.sheetDiagramCount || 0} sheets · ${payload.wiring.linkCount} wires`;
 
   populateFilters();
+  refreshLogicAudit();
+  populateAuditSheets();
   render();
 
   tabFlow.addEventListener("click", () => {
@@ -909,6 +1008,10 @@ async function init() {
     setActiveTab("wiring");
     render();
   });
+  tabAudit.addEventListener("click", () => {
+    setActiveTab("audit");
+    render();
+  });
   diagramSheet.addEventListener("change", () => {
     selectedBlockId = "";
     selectedPortName = "";
@@ -916,6 +1019,7 @@ async function init() {
   });
   diagramSearch.addEventListener("input", render);
   diagramShowLabels.addEventListener("change", render);
+  diagramAuditOnly.addEventListener("change", render);
   diagramCanvas.addEventListener("click", (event) => {
     const block = event.target.closest(".diagram-block");
     if (!block) return;
@@ -982,6 +1086,23 @@ async function init() {
   compositeFilter.addEventListener("change", render);
   tagFilter.addEventListener("change", render);
   focusBlock.addEventListener("change", render);
+  auditConfidence.addEventListener("change", render);
+  auditSheet.addEventListener("change", render);
+  auditBackupOnly.addEventListener("change", render);
+  auditTableBody.addEventListener("click", (event) => {
+    const row = event.target.closest(".audit-row");
+    if (!row) return;
+    selectedAuditBlockId = row.dataset.blockId || "";
+    const sheet = getSheetDiagramByName(row.dataset.sheet || "");
+    if (sheet) {
+      setFlowSelection(sheet.docId, selectedAuditBlockId, "");
+      diagramSheet.value = sheet.docId;
+      selectedBlockId = selectedAuditBlockId;
+    }
+    renderAuditTable();
+    setActiveTab("flow");
+    render();
+  });
   printBtn.addEventListener("click", () => window.print());
   closeBtn.addEventListener("click", () => window.close());
 }

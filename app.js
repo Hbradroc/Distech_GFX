@@ -1,4 +1,4 @@
-const APP_VERSION = "1.8.3";
+const APP_VERSION = "1.9.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -558,6 +558,12 @@ async function loadTemplate() {
       });
     });
     log(`Logic: ${archive.wiringGraph.crossRefCount || 0} cross-reference tags, ${archive.wiringGraph.linkCount} wire connections.`);
+    const audit = GfxCore.analyzeNonFunctionalBlocks(archive.wiringGraph);
+    if (audit.summary.total) {
+      log(
+        `Logic audit: ${audit.summary.likelyBackup} likely backup/Monitor blocks, ${audit.summary.highConfidence} high-confidence dead paths — open wiring viewer → Logic audit tab.`,
+      );
+    }
     log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {
     log(`Error: ${error.message}`);
