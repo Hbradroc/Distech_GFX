@@ -7,9 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="wiring.css?v=1.9.0" />
-    <script defer src="gfx-core.js?v=1.9.0"></script>
-    <script defer src="wiring.js?v=1.9.0"></script>
+    <link rel="stylesheet" href="wiring.css?v=1.10.0" />
+    <script defer src="gfx-core.js?v=1.10.0"></script>
+    <script defer src="wiring.js?v=1.10.0"></script>
   </head>
   <body>
     <header class="wiring-toolbar no-print">
@@ -44,6 +44,7 @@
           <select id="flowSheet" aria-label="Programming sheet">
             <option value="">Select sheet…</option>
           </select>
+          <button type="button" id="openRungFromFlow" class="secondary">Open rung view ↗</button>
           <select id="flowBlock" aria-label="Block on sheet">
             <option value="">Select block…</option>
           </select>
@@ -60,6 +61,7 @@
           <select id="diagramSheet" aria-label="Programming sheet">
             <option value="">Select sheet…</option>
           </select>
+          <button type="button" id="openRungFromDiagram" class="secondary">Open rung view ↗</button>
           <input type="search" id="diagramSearch" placeholder="Highlight tag or block name…" autocomplete="off" />
           <label class="wiring-toggle">
             <input type="checkbox" id="diagramShowLabels" />

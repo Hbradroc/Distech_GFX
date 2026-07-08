@@ -1906,6 +1906,171 @@ const GfxCore = (() => {
     bacnet_sidecar: "BACnet mapping/register block — may be intentional metadata, not main control logic.",
   };
 
+  const GENERIC_BLOCK_NAMES = new Set([
+    "",
+    "Reference Target",
+    "Reference Hub",
+    "Reference In",
+    "Reference Out",
+    "Internal Constant",
+    "Monitor",
+  ]);
+
+  function isGenericBlockName(name) {
+    const raw = String(name || "").trim();
+    return GENERIC_BLOCK_NAMES.has(raw) || raw.startsWith("LogicConstant#");
+  }
+
+  function friendlyBlockType(tag) {
+    const map = {
+      IncomingTag: "Reference in",
+      OutgoingTag: "Reference out",
+      InternalConstantNumeric: "Constant",
+      SimpleCompositeBlock: "Logic module",
+      And: "And",
+      Or: "Or",
+      Not: "Not",
+      Switch: "Switch",
+      Add: "Add",
+      Hysteresis: "Hysteresis",
+      Ramp: "Ramp",
+      LessThan: "Less than",
+      GreaterThan: "Greater than",
+    };
+    if (map[tag]) return map[tag];
+    if (tag.startsWith("Bacnet")) return tag.replace(/^Bacnet/, "BACnet ");
+    if (tag.includes("HardwareOutput")) return "Hardware output";
+    if (tag.includes("HardwareInput")) return "Hardware input";
+    if (tag.includes("Pid") || tag.includes("JPID")) return "PID";
+    return tag.replace(/([a-z])([A-Z])/g, "$1 $2");
+  }
+
+  function getBlockDisplayInfo(block) {
+    const tag = block.tag || "";
+    const tagName = sanitizeDisplayText(block.tagName, "");
+    const name = sanitizeDisplayText(block.name, "");
+
+    if (tag === "IncomingTag") {
+      const title = tagName || (!isGenericBlockName(name) ? name : "Reference in");
+      return { title, subtitle: tagName ? "From another sheet" : "Reads a shared tag" };
+    }
+    if (tag === "OutgoingTag") {
+      const title = tagName || (!isGenericBlockName(name) ? name : "Reference out");
+      return { title, subtitle: tagName ? "Defined on this sheet" : "Publishes a shared tag" };
+    }
+    if (tag === "InternalConstantNumeric") {
+      return {
+        title: !isGenericBlockName(name) ? name : `Constant #${block.id}`,
+        subtitle: "Fixed value",
+      };
+    }
+    if (tag === "SimpleCompositeBlock") {
+      return { title: name || `Module #${block.id}`, subtitle: "Logic module" };
+    }
+    if (tagName && (isGenericBlockName(name) || name === tag)) {
+      return { title: tagName, subtitle: friendlyBlockType(tag) };
+    }
+    if (!isGenericBlockName(name)) {
+      return { title: name, subtitle: name !== friendlyBlockType(tag) ? friendlyBlockType(tag) : "" };
+    }
+    return { title: friendlyBlockType(tag) || `${tag} #${block.id}`, subtitle: "" };
+  }
+
+  function buildSheetRungs(sheet) {
+    if (!sheet?.blocks?.length) {
+      return { sheetName: sheet?.name || "", rungs: [], orphanCount: 0 };
+    }
+
+    const blockById = Object.fromEntries(sheet.blocks.map((block) => [block.id, block]));
+    const incoming = new Map();
+    const outgoing = new Map();
+
+    for (const link of sheet.links || []) {
+      if (!outgoing.has(link.fromId)) outgoing.set(link.fromId, []);
+      if (!incoming.has(link.toId)) incoming.set(link.toId, []);
+      outgoing.get(link.fromId).push(link);
+      incoming.get(link.toId).push(link);
+    }
+
+    function sortBlocks(a, b) {
+      return a.y - b.y || a.x - b.x || a.id.localeCompare(b.id);
+    }
+
+    function linkSort(a, b) {
+      const ba = blockById[a.fromId];
+      const bb = blockById[b.fromId];
+      return sortBlocks(ba, bb);
+    }
+
+    function stepFromBlock(block, inPort = "", outPort = "") {
+      const display = getBlockDisplayInfo(block);
+      return {
+        blockId: block.id,
+        title: display.title,
+        subtitle: display.subtitle || friendlyBlockType(block.tag),
+        tag: block.tag,
+        category: block.category,
+        inPort,
+        outPort,
+      };
+    }
+
+    const rungs = [];
+    const used = new Set();
+
+    const sinks = sheet.blocks
+      .filter((block) => !(outgoing.get(block.id) || []).length)
+      .sort(sortBlocks);
+
+    for (const sink of sinks) {
+      const chain = [];
+      const ports = [];
+      let current = sink;
+      let guard = 0;
+      while (current && guard++ < 64) {
+        const inLinks = (incoming.get(current.id) || []).sort(linkSort);
+        const inPort = inLinks[0]?.toPort || "";
+        const outPort = (outgoing.get(current.id) || [])[0]?.fromPort || "";
+        chain.unshift(current);
+        ports.unshift({ inPort, outPort });
+        if (!inLinks.length) break;
+        const parent = blockById[inLinks[0].fromId];
+        if (!parent || chain.includes(parent)) break;
+        current = parent;
+      }
+
+      const steps = chain.map((block, index) =>
+        stepFromBlock(block, ports[index]?.inPort || "", ports[index]?.outPort || ""),
+      );
+      if (!steps.length) continue;
+      rungs.push({
+        number: rungs.length + 1,
+        steps,
+        sinkId: sink.id,
+      });
+      chain.forEach((block) => used.add(block.id));
+    }
+
+    const orphans = sheet.blocks.filter((block) => !used.has(block.id)).sort(sortBlocks);
+    for (const block of orphans) {
+      rungs.push({
+        number: rungs.length + 1,
+        steps: [stepFromBlock(block)],
+        orphan: true,
+      });
+    }
+
+    return {
+      sheetName: sheet.name,
+      docId: sheet.docId,
+      blockCount: sheet.blocks.length,
+      linkCount: sheet.links?.length || 0,
+      rungCount: rungs.length,
+      orphanCount: orphans.length,
+      rungs,
+    };
+  }
+
   function buildWiringBlockMeta(wiring) {
     const meta = new Map();
     function ingest(id, tag, name, label, sheet, tagName = "") {
@@ -2084,6 +2249,9 @@ const GfxCore = (() => {
     loadWiringViewerPayload,
     analyzeNonFunctionalBlocks,
     UTILITY_ROLE_HELP,
+    buildSheetRungs,
+    getBlockDisplayInfo,
+    friendlyBlockType,
   };
 })();
 

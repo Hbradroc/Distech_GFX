@@ -1,0 +1,250 @@
+:root {
+  --ink: #161616;
+  --paper: #f4f1e8;
+  --accent: #0f766e;
+  --card: #fffdf7;
+  --line: #d6d0c1;
+  --muted: #5c574d;
+  --rail: #9ca3af;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.rung-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--card);
+  border-bottom: 2px solid var(--ink);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.rung-toolbar h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.rung-subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.rung-toolbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.secondary {
+  background: #fff;
+}
+
+.rung-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+
+.rung-stats,
+.rung-help {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.rung-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin: 16px 0 20px;
+  padding: 14px;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+}
+
+.rung-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.rung-controls select {
+  font: inherit;
+  min-width: 280px;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+}
+
+.rung-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rung-row {
+  display: grid;
+  grid-template-columns: 42px 8px 1fr 8px;
+  gap: 0;
+  align-items: stretch;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 var(--ink);
+  min-height: 72px;
+}
+
+.rung-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  border-right: 2px solid var(--line);
+  background: #efe9dc;
+}
+
+.rung-rail {
+  background: linear-gradient(180deg, var(--rail) 0%, var(--rail) 100%);
+  width: 8px;
+}
+
+.rung-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.rung-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rung-wire {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.1rem;
+  user-select: none;
+}
+
+.rung-block {
+  min-width: 110px;
+  max-width: 200px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  background: #fff;
+  line-height: 1.3;
+}
+
+.rung-block strong {
+  display: block;
+  font-size: 0.92rem;
+}
+
+.rung-block small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.rung-block.cat-reference {
+  border-color: #15803d;
+  background: #bbf7d0;
+}
+
+.rung-block.cat-logic,
+.rung-block.cat-pid {
+  border-color: #6d28d9;
+  background: #ddd6fe;
+}
+
+.rung-block.cat-hwout,
+.rung-block.cat-hwin {
+  border-color: #1d4ed8;
+  background: #bfdbfe;
+}
+
+.rung-block.cat-constant {
+  border-color: #6b7280;
+  background: #f3f4f6;
+}
+
+.rung-block.cat-composite {
+  border-color: #b45309;
+  background: #fde68a;
+}
+
+.rung-block.cat-bacnet {
+  border-color: #c2410c;
+  background: #fed7aa;
+}
+
+.rung-row.orphan .rung-num {
+  background: #fee2e2;
+}
+
+.rung-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .rung-main {
+    max-width: none;
+    padding: 0 12px;
+  }
+
+  .rung-row {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

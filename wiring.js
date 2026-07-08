@@ -48,6 +48,10 @@ const wiringTableBody = document.getElementById("wiringTableBody");
 const wiringEmpty = document.getElementById("wiringEmpty");
 const printBtn = document.getElementById("printBtn");
 const closeBtn = document.getElementById("closeBtn");
+const openRungFromFlow = document.getElementById("openRungFromFlow");
+const openRungFromDiagram = document.getElementById("openRungFromDiagram");
+
+const RUNG_VIEW_VERSION = "1.10.0";
 
 let payload = null;
 let activeTab = "flow";
@@ -107,6 +111,26 @@ async function loadPayload() {
     }
   }
   return null;
+}
+
+function openRungViewer(sheetDocId = "") {
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get("key") || "";
+  const store = params.get("store") || "";
+  const docId = sheetDocId || flowSheet.value || diagramSheet.value;
+  if (!docId) {
+    window.alert("Select a programming sheet first.");
+    return;
+  }
+  const query = new URLSearchParams();
+  query.set("v", RUNG_VIEW_VERSION);
+  if (key) query.set("key", key);
+  if (store) query.set("store", store);
+  query.set("sheet", docId);
+  const popup = window.open(`rung-view.html?${query.toString()}`, "_blank");
+  if (!popup) {
+    window.alert("Popup blocked — allow popups for this site.");
+  }
 }
 
 function refreshLogicAudit() {
@@ -481,15 +505,6 @@ function setFlowSelection(docId, blockId, portName = "") {
   selectedBlockId = flowBlock.value;
   selectedPortName = flowPort.value;
   diagramSheet.value = docId || diagramSheet.value;
-}
-
-function populateFlowSheets() {
-  for (const sheet of payload.wiring.sheetDiagrams || []) {
-    const option = document.createElement("option");
-    option.value = sheet.docId;
-    option.textContent = `${sheet.name} (${sheet.blockCount} blocks)`;
-    flowSheet.appendChild(option);
-  }
 }
 
 function populateFlowBlocks() {
@@ -939,11 +954,11 @@ function applyInitialFocus() {
 }
 
 function populateFilters() {
-  populateFlowSheets();
   for (const sheet of payload.wiring.sheetDiagrams || []) {
     const option = document.createElement("option");
     option.value = sheet.docId;
     option.textContent = `${sheet.name} (${sheet.blockCount} blocks)`;
+    flowSheet.appendChild(option.cloneNode(true));
     diagramSheet.appendChild(option);
   }
   for (const sheet of payload.wiring.sheets || []) {
@@ -991,6 +1006,13 @@ async function init() {
   refreshLogicAudit();
   populateAuditSheets();
   render();
+
+  if (openRungFromFlow) {
+    openRungFromFlow.addEventListener("click", () => openRungViewer(flowSheet.value));
+  }
+  if (openRungFromDiagram) {
+    openRungFromDiagram.addEventListener("click", () => openRungViewer(diagramSheet.value));
+  }
 
   tabFlow.addEventListener("click", () => {
     setActiveTab("flow");

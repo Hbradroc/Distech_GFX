@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distech GFX — Rung View</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="rung-view.css?v=1.10.0" />
+    <script defer src="gfx-core.js?v=1.10.0"></script>
+    <script defer src="rung-view.js?v=1.10.0"></script>
+  </head>
+  <body>
+    <header class="rung-toolbar no-print">
+      <div>
+        <h1 id="rungTitle">Sequential rung view</h1>
+        <p id="rungSubtitle" class="rung-subtitle">PLC-style rows — left to right signal flow on one programming sheet</p>
+      </div>
+      <div class="rung-toolbar-actions">
+        <button type="button" id="printBtn" class="primary">Print / Save PDF</button>
+        <button type="button" id="closeBtn" class="secondary">Close</button>
+      </div>
+    </header>
+
+    <div class="rung-print-banner print-only">
+      <h1 id="printTitle">Distech GFX rung view</h1>
+      <p id="printMeta"></p>
+    </div>
+
+    <main class="rung-main">
+      <p id="rungStats" class="rung-stats"></p>
+      <p class="rung-help no-print">
+        Each numbered row is one signal chain on this sheet, read left → right (inputs to outputs).
+        This is an auto-layout approximation — not identical to EC-gfxProgram’s canvas positions.
+      </p>
+
+      <div class="rung-controls no-print">
+        <label>
+          Sheet
+          <select id="sheetPicker" aria-label="Programming sheet"></select>
+        </label>
+        <button type="button" id="openSheetTabBtn" class="secondary">Open selected sheet in new tab</button>
+      </div>
+
+      <div id="rungCanvas" class="rung-canvas" aria-label="Sequential rung diagram"></div>
+      <p id="rungEmpty" class="rung-empty" hidden>No rungs on this sheet.</p>
+    </main>
+  </body>
+</html>
