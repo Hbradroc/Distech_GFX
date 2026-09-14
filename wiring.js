@@ -57,7 +57,7 @@ const closeBtn = document.getElementById("closeBtn");
 const openRungFromFlow = document.getElementById("openRungFromFlow");
 const openRungFromDiagram = document.getElementById("openRungFromDiagram");
 
-const RUNG_VIEW_VERSION = "1.11.1";
+const RUNG_VIEW_VERSION = "1.11.2";
 
 let payload = null;
 let activeTab = "sequence";
@@ -537,6 +537,69 @@ function setFlowSelection(docId, blockId, portName = "") {
   selectedBlockId = flowBlock.value;
   selectedPortName = flowPort.value;
   diagramSheet.value = docId || diagramSheet.value;
+}
+
+function findPreferredFlowBlock(sheet, preferredNames = []) {
+  if (!sheet?.blocks?.length) return null;
+  const blocks = sheet.blocks;
+  for (const name of preferredNames) {
+    const re = name instanceof RegExp ? name : new RegExp(`^${name}$`, "i");
+    const hit = blocks.find(
+      (block) => re.test(block.name || "") || re.test(block.tagName || "") || re.test(block.tag || ""),
+    );
+    if (hit) return hit;
+  }
+  const ranked = [...blocks].sort((a, b) => {
+    const score = (block) => {
+      const hay = `${block.tag || ""} ${block.name || ""}`;
+      if (/BacnetAnalogValue/i.test(hay) && /test_mode/i.test(hay)) return 100;
+      if (/Multiplexer/i.test(hay)) return 80;
+      if (/BacnetAnalogValue|Switch|Hysteresis/i.test(hay)) return 40;
+      if (/IncomingTag|OutgoingTag|InternalConstant|TextShape/i.test(hay)) return 0;
+      return 10;
+    };
+    return score(b) - score(a);
+  });
+  return ranked[0] || null;
+}
+
+function openRelatedSignalFlowFromSequence() {
+  const mode = sequenceMode?.value || "";
+  const scenario = (runSequence?.scenarios || []).find((entry) => String(entry.mode) === String(mode));
+
+  let sheetName = "Testing";
+  let preferred = [/test_mode/i, /Multiplexer/i];
+  if (scenario) {
+    if (scenario.econoAllowed) {
+      sheetName = "Economizer";
+      preferred = [/Subtract/i, /Allowed/i, /Mech Lockout/i, /GreaterThan/i];
+    } else if (/heat/i.test(scenario.label || "")) {
+      sheetName = "heat_cool";
+      preferred = [/heat_sense/i, /cool_sense/i, /^econo$/i];
+    } else if (/cool/i.test(scenario.label || "") && !scenario.econoAllowed) {
+      sheetName = "heat_cool";
+      preferred = [/cool_sense/i, /heat_sense/i, /^econo$/i];
+    }
+  }
+
+  let sheet = getSheetDiagramByName(sheetName);
+  if (!sheet) sheet = getSheetDiagramByName("Testing");
+  if (!sheet && (payload.wiring.sheetDiagrams || []).length) {
+    sheet = payload.wiring.sheetDiagrams[0];
+  }
+  if (!sheet) {
+    window.alert("No programming sheets found in this .gfx.");
+    return;
+  }
+
+  const block = findPreferredFlowBlock(sheet, preferred);
+  setFlowSelection(sheet.docId, block?.id || "", "");
+  setActiveTab("flow");
+  render();
+  if (!block && flowEmpty) {
+    flowEmpty.hidden = false;
+    flowEmpty.textContent = `Sheet "${sheet.name}" is selected — pick a block in the dropdown to trace wires.`;
+  }
 }
 
 function populateFlowBlocks() {
@@ -1226,14 +1289,7 @@ async function init() {
     });
   }
   if (openFlowFromSequence) {
-    openFlowFromSequence.addEventListener("click", () => {
-      const testing = getSheetDiagramByName("Testing");
-      if (testing) {
-        setFlowSelection(testing.docId, "", "");
-      }
-      setActiveTab("flow");
-      render();
-    });
+    openFlowFromSequence.addEventListener("click", openRelatedSignalFlowFromSequence);
   }
   diagramSheet.addEventListener("change", () => {
     selectedBlockId = "";
