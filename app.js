@@ -1,4 +1,4 @@
-const APP_VERSION = "1.10.0";
+const APP_VERSION = "1.11.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -460,6 +460,11 @@ async function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortN
     log("Load a template first to view wiring.");
     return;
   }
+  const runSequence = GfxCore.buildRunSequence
+    ? GfxCore.buildRunSequence(appState.wiringGraph, appState.parameters, {
+        mainXmlText: appState.archive?.mainXmlText || "",
+      })
+    : null;
   const payload = {
     projectName: appState.projectName || appState.fileName,
     fileName: appState.fileName,
@@ -468,6 +473,7 @@ async function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortN
     focusTagName: focusTagName || "",
     focusPortName: focusPortName || "",
     wiring: appState.wiringGraph,
+    runSequence,
   };
 
   const storageKey = `${WIRING_STORAGE_PREFIX}${Date.now()}`;
@@ -538,7 +544,16 @@ async function loadTemplate() {
     if (openWiringBtn) openWiringBtn.disabled = false;
     if (wiringLaunch) wiringLaunch.hidden = false;
     if (wiringLaunchText && archive.wiringGraph) {
-      wiringLaunchText.textContent = `${archive.wiringGraph.crossRefCount || 0} tags · ${archive.wiringGraph.linkCount} wires`;
+      const sequence = GfxCore.buildRunSequence
+        ? GfxCore.buildRunSequence(archive.wiringGraph, appState.parameters, {
+            mainXmlText: archive.mainXmlText || "",
+          })
+        : null;
+      if (sequence?.detected) {
+        wiringLaunchText.textContent = `Run order available · ${sequence.scenarios?.length || 0} test modes · ${archive.wiringGraph.crossRefCount || 0} tags`;
+      } else {
+        wiringLaunchText.textContent = `${archive.wiringGraph.crossRefCount || 0} tags · ${archive.wiringGraph.linkCount} wires`;
+      }
     }
 
     renderParameterList();
@@ -558,6 +573,16 @@ async function loadTemplate() {
       });
     });
     log(`Logic: ${archive.wiringGraph.crossRefCount || 0} cross-reference tags, ${archive.wiringGraph.linkCount} wire connections.`);
+    const sequence = GfxCore.buildRunSequence
+      ? GfxCore.buildRunSequence(archive.wiringGraph, appState.parameters, {
+          mainXmlText: archive.mainXmlText || "",
+        })
+      : null;
+    if (sequence?.detected) {
+      log(
+        `Run order: Testing → Economizer → heat_cool → ventilate (${sequence.scenarios.length} test modes). Open wiring viewer → Run order tab.`,
+      );
+    }
     const audit = GfxCore.analyzeNonFunctionalBlocks(archive.wiringGraph);
     if (audit.summary.total) {
       log(

@@ -7,9 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="wiring.css?v=1.10.0" />
-    <script defer src="gfx-core.js?v=1.10.0"></script>
-    <script defer src="wiring.js?v=1.10.0"></script>
+    <link rel="stylesheet" href="wiring.css?v=1.11.0" />
+    <script defer src="gfx-core.js?v=1.11.0"></script>
+    <script defer src="wiring.js?v=1.11.0"></script>
   </head>
   <body>
     <header class="wiring-toolbar no-print">
@@ -32,14 +32,29 @@
       <p id="wiringStats" class="wiring-stats"></p>
 
       <div class="wiring-tabs no-print" role="tablist" aria-label="Viewer mode">
-        <button type="button" id="tabFlow" class="wiring-tab active" role="tab" aria-selected="true">Signal flow</button>
+        <button type="button" id="tabSequence" class="wiring-tab active" role="tab" aria-selected="true">Run order</button>
+        <button type="button" id="tabFlow" class="wiring-tab" role="tab" aria-selected="false">Signal flow</button>
         <button type="button" id="tabDiagram" class="wiring-tab" role="tab" aria-selected="false">Block diagram</button>
         <button type="button" id="tabCrossRef" class="wiring-tab" role="tab" aria-selected="false">Cross-references</button>
         <button type="button" id="tabWiring" class="wiring-tab" role="tab" aria-selected="false">Sheet wiring</button>
         <button type="button" id="tabAudit" class="wiring-tab" role="tab" aria-selected="false">Logic audit</button>
       </div>
 
-      <section id="flowPanel" class="wiring-panel">
+      <section id="sequencePanel" class="wiring-panel">
+        <div class="wiring-controls no-print sequence-controls" aria-label="Test mode walkthrough">
+          <label class="sequence-mode-label" for="sequenceMode">Walk a test mode</label>
+          <select id="sequenceMode" aria-label="Test mode scenario">
+            <option value="">Overview (all stages)</option>
+          </select>
+          <button type="button" id="openFlowFromSequence" class="secondary">Open related signal flow</button>
+        </div>
+        <div id="sequenceView" class="sequence-view" aria-live="polite"></div>
+        <p id="sequenceEmpty" class="wiring-empty" hidden>
+          This project does not expose a Testing → Economizer → heat_cool run order. Use Signal flow or Block diagram instead.
+        </p>
+      </section>
+
+      <section id="flowPanel" class="wiring-panel" hidden>
         <div class="wiring-controls no-print" aria-label="Signal flow filters">
           <select id="flowSheet" aria-label="Programming sheet">
             <option value="">Select sheet…</option>
@@ -179,7 +194,7 @@
       </section>
 
       <footer class="wiring-footer">
-        <p>Read-only view. Use <strong>Signal flow</strong> to follow inputs → block → outputs. Use EC-gfxProgram to edit logic.</p>
+        <p>Read-only view. Use <strong>Run order</strong> for first→second→third, or <strong>Signal flow</strong> for wires. Edit logic in EC-gfxProgram.</p>
       </footer>
     </main>
   </body>

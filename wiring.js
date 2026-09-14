@@ -4,11 +4,17 @@ const wiringSubtitle = document.getElementById("wiringSubtitle");
 const wiringStats = document.getElementById("wiringStats");
 const printTitle = document.getElementById("printTitle");
 const printMeta = document.getElementById("printMeta");
+const tabSequence = document.getElementById("tabSequence");
 const tabFlow = document.getElementById("tabFlow");
 const tabDiagram = document.getElementById("tabDiagram");
 const tabCrossRef = document.getElementById("tabCrossRef");
 const tabWiring = document.getElementById("tabWiring");
 const tabAudit = document.getElementById("tabAudit");
+const sequencePanel = document.getElementById("sequencePanel");
+const sequenceMode = document.getElementById("sequenceMode");
+const sequenceView = document.getElementById("sequenceView");
+const sequenceEmpty = document.getElementById("sequenceEmpty");
+const openFlowFromSequence = document.getElementById("openFlowFromSequence");
 const flowPanel = document.getElementById("flowPanel");
 const diagramPanel = document.getElementById("diagramPanel");
 const crossRefPanel = document.getElementById("crossRefPanel");
@@ -51,16 +57,17 @@ const closeBtn = document.getElementById("closeBtn");
 const openRungFromFlow = document.getElementById("openRungFromFlow");
 const openRungFromDiagram = document.getElementById("openRungFromDiagram");
 
-const RUNG_VIEW_VERSION = "1.10.0";
+const RUNG_VIEW_VERSION = "1.11.0";
 
 let payload = null;
-let activeTab = "flow";
+let activeTab = "sequence";
 let selectedXrefTag = "";
 let selectedBlockId = "";
 let selectedPortName = "";
 let diagramScale = 1;
 let logicAudit = null;
 let selectedAuditBlockId = "";
+let runSequence = null;
 
 const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
 
@@ -852,16 +859,19 @@ function renderSheetDiagram() {
 
 function setActiveTab(tab) {
   activeTab = tab;
+  tabSequence.classList.toggle("active", tab === "sequence");
   tabFlow.classList.toggle("active", tab === "flow");
   tabDiagram.classList.toggle("active", tab === "diagram");
   tabCrossRef.classList.toggle("active", tab === "xref");
   tabWiring.classList.toggle("active", tab === "wiring");
   tabAudit.classList.toggle("active", tab === "audit");
+  tabSequence.setAttribute("aria-selected", String(tab === "sequence"));
   tabFlow.setAttribute("aria-selected", String(tab === "flow"));
   tabDiagram.setAttribute("aria-selected", String(tab === "diagram"));
   tabCrossRef.setAttribute("aria-selected", String(tab === "xref"));
   tabWiring.setAttribute("aria-selected", String(tab === "wiring"));
   tabAudit.setAttribute("aria-selected", String(tab === "audit"));
+  sequencePanel.hidden = tab !== "sequence";
   flowPanel.hidden = tab !== "flow";
   diagramPanel.hidden = tab !== "diagram";
   crossRefPanel.hidden = tab !== "xref";
@@ -870,9 +880,140 @@ function setActiveTab(tab) {
   renderStats();
 }
 
+function populateSequenceModes() {
+  if (!sequenceMode) return;
+  const previous = sequenceMode.value;
+  sequenceMode.innerHTML = '<option value="">Overview (all stages)</option>';
+  for (const scenario of runSequence?.scenarios || []) {
+    const option = document.createElement("option");
+    option.value = String(scenario.mode);
+    option.textContent = `${scenario.mode} — ${scenario.label}`;
+    sequenceMode.appendChild(option);
+  }
+  if ([...sequenceMode.options].some((option) => option.value === previous)) {
+    sequenceMode.value = previous;
+  }
+}
+
+function renderSequenceOverview() {
+  const stagesHtml = (runSequence.stages || [])
+    .map(
+      (stage) => `
+      <article class="sequence-stage">
+        <div class="sequence-stage-num">${escapeHtml(String(stage.order))}</div>
+        <div>
+          <span class="sequence-stage-sheet">${escapeHtml(stage.sheet)}</span>
+          <h3>${escapeHtml(stage.title)}</h3>
+          <p>${escapeHtml(stage.summary)}</p>
+          <ul class="sequence-block-list">
+            ${(stage.blocks || [])
+              .map(
+                (block) => `
+              <li>
+                <strong>${escapeHtml(block.name)}</strong>
+                <span>${escapeHtml(block.role)}</span>
+              </li>`,
+              )
+              .join("")}
+          </ul>
+        </div>
+      </article>`,
+    )
+    .join("");
+
+  const pills = (runSequence.overview || [])
+    .map((line) => `<span class="sequence-pill">${escapeHtml(line)}</span>`)
+    .join("");
+
+  const setpoints = runSequence.setpoints || {};
+  sequenceView.innerHTML = `
+    <section class="sequence-hero">
+      <h2>${escapeHtml(runSequence.title || "Run order")}</h2>
+      <p>${escapeHtml(runSequence.subtitle || "")}</p>
+      <div class="sequence-overview">${pills}</div>
+      <div class="sequence-setpoints">
+        <span><strong>test_mode</strong> default ${escapeHtml(String(setpoints.test_mode ?? "—"))}</span>
+        <span><strong>econo_delta</strong> ${escapeHtml(String(setpoints.econo_delta ?? "—"))}°F</span>
+        <span><strong>dmp_min</strong> ${escapeHtml(String(setpoints.dmp_min ?? "—"))}%</span>
+      </div>
+    </section>
+    <div class="sequence-stages">${stagesHtml}</div>`;
+}
+
+function renderSequenceScenario(mode) {
+  const scenario = (runSequence.scenarios || []).find((entry) => String(entry.mode) === String(mode));
+  if (!scenario) {
+    renderSequenceOverview();
+    return;
+  }
+  const temps = scenario.temps || {};
+  const badgeClass = scenario.econoAllowed ? "ok" : "blocked";
+  const badgeText =
+    scenario.econoAllowed == null
+      ? "Economizer n/a"
+      : scenario.econoAllowed
+        ? "Economizer allowed"
+        : "Economizer blocked";
+
+  sequenceView.innerHTML = `
+    <section class="sequence-scenario-card">
+      <h2>Mode ${escapeHtml(String(scenario.mode))} — ${escapeHtml(scenario.label)}</h2>
+      <p>${escapeHtml(scenario.occupancy)} · ${escapeHtml(scenario.demand)} · ${escapeHtml(scenario.path)}</p>
+      <span class="sequence-badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+      <div class="sequence-temps">
+        <div class="sequence-temp"><span>Space</span><strong>${escapeHtml(String(temps.space_temp))}°F</strong></div>
+        <div class="sequence-temp"><span>Outdoor</span><strong>${escapeHtml(String(temps.outdoor_temp))}°F</strong></div>
+        <div class="sequence-temp"><span>Discharge</span><strong>${escapeHtml(String(temps.temp_discharge))}°F</strong></div>
+      </div>
+      <ol class="sequence-fallthrough">
+        ${(scenario.steps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+      </ol>
+      <p style="margin:14px 0 0;color:var(--muted)">Damper: ${escapeHtml(scenario.damper)}</p>
+    </section>
+    <div class="sequence-stages">
+      ${(runSequence.stages || [])
+        .map(
+          (stage) => `
+        <article class="sequence-stage">
+          <div class="sequence-stage-num">${escapeHtml(String(stage.order))}</div>
+          <div>
+            <span class="sequence-stage-sheet">${escapeHtml(stage.sheet)}</span>
+            <h3>${escapeHtml(stage.title)}</h3>
+            <p>${escapeHtml(stage.summary)}</p>
+          </div>
+        </article>`,
+        )
+        .join("")}
+    </div>`;
+}
+
+function renderSequence() {
+  runSequence = payload?.runSequence || null;
+  if (!runSequence?.detected) {
+    sequenceView.innerHTML = "";
+    if (sequenceEmpty) {
+      sequenceEmpty.hidden = false;
+      sequenceEmpty.textContent =
+        runSequence?.reason ||
+        "This project does not expose a Testing → Economizer → heat_cool run order. Use Signal flow or Block diagram instead.";
+    }
+    return;
+  }
+  if (sequenceEmpty) sequenceEmpty.hidden = true;
+  populateSequenceModes();
+  if (sequenceMode?.value) renderSequenceScenario(sequenceMode.value);
+  else renderSequenceOverview();
+}
+
 function renderStats() {
   const w = payload.wiring;
-  if (activeTab === "flow") {
+  if (activeTab === "sequence") {
+    if (runSequence?.detected) {
+      wiringStats.textContent = `Run order · ${runSequence.scenarios?.length || 0} test modes · inferred Testing → Economizer → heat_cool → ventilate`;
+    } else {
+      wiringStats.textContent = "Run order not detected for this .gfx — use Signal flow / Block diagram";
+    }
+  } else if (activeTab === "flow") {
     const blockId = flowBlock.value;
     if (blockId) {
       const flow = core().tracePortFlow ? core().tracePortFlow(payload.wiring, blockId, flowPort.value) : { inputs: [], outputs: [] };
@@ -899,7 +1040,9 @@ function renderStats() {
 }
 
 function render() {
-  if (activeTab === "flow") {
+  if (activeTab === "sequence") {
+    renderSequence();
+  } else if (activeTab === "flow") {
     renderSignalFlow(flowBlock.value, flowPort.value);
   } else if (activeTab === "audit") {
     renderAuditTable();
@@ -950,6 +1093,10 @@ function applyInitialFocus() {
   if ((w.sheetDiagrams || []).length > 0) {
     setFlowSelection(w.sheetDiagrams[0].docId, "", "");
   }
+  if (payload.runSequence?.detected || runSequence?.detected) {
+    setActiveTab("sequence");
+    return;
+  }
   setActiveTab("flow");
 }
 
@@ -997,14 +1144,18 @@ async function init() {
   }
 
   const title = payload.projectName || payload.fileName || "GFX project";
-  document.title = `Signal flow — ${title}`;
-  wiringSubtitle.textContent = `${title} · follow inputs → block → outputs (read-only)`;
-  printTitle.textContent = `Logic signal flow — ${title}`;
+  document.title = `Logic viewer — ${title}`;
+  wiringSubtitle.textContent = `${title} · run order, signal flow, and block diagrams (read-only)`;
+  printTitle.textContent = `Logic run order — ${title}`;
   printMeta.textContent = `Exported ${new Date(payload.exportedAt).toLocaleString()} · ${payload.wiring.sheetDiagramCount || 0} sheets · ${payload.wiring.linkCount} wires`;
 
+  runSequence = payload.runSequence || null;
   populateFilters();
   refreshLogicAudit();
   populateAuditSheets();
+  populateSequenceModes();
+  if (runSequence?.detected) setActiveTab("sequence");
+  else setActiveTab("flow");
   render();
 
   if (openRungFromFlow) {
@@ -1014,6 +1165,10 @@ async function init() {
     openRungFromDiagram.addEventListener("click", () => openRungViewer(diagramSheet.value));
   }
 
+  tabSequence.addEventListener("click", () => {
+    setActiveTab("sequence");
+    render();
+  });
   tabFlow.addEventListener("click", () => {
     setActiveTab("flow");
     render();
@@ -1034,6 +1189,22 @@ async function init() {
     setActiveTab("audit");
     render();
   });
+  if (sequenceMode) {
+    sequenceMode.addEventListener("change", () => {
+      setActiveTab("sequence");
+      render();
+    });
+  }
+  if (openFlowFromSequence) {
+    openFlowFromSequence.addEventListener("click", () => {
+      const testing = getSheetDiagramByName("Testing");
+      if (testing) {
+        setFlowSelection(testing.docId, "", "");
+      }
+      setActiveTab("flow");
+      render();
+    });
+  }
   diagramSheet.addEventListener("change", () => {
     selectedBlockId = "";
     selectedPortName = "";

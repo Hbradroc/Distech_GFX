@@ -2217,6 +2217,340 @@ const GfxCore = (() => {
     };
   }
 
+  const DEFAULT_TEST_MODE_LABELS = {
+    1: "Unoccupied Economizer",
+    2: "Unoccupied Cooling",
+    3: "Unoccupied Heating",
+    4: "Occupied Economizer",
+    5: "Occupied Cooling",
+    6: "Occupied Heating",
+    7: "Freeze condition",
+    8: "High CO2 Levels",
+    9: "High RH Levels",
+  };
+
+  function paramDefaultMap(parameters) {
+    const map = new Map();
+    for (const param of parameters || []) {
+      if (param.field === "DefaultValue" || param.field === "Default" || param.category === "InternalConstant") {
+        map.set(param.name, param.value);
+      }
+    }
+    return map;
+  }
+
+  function findSheetDiagram(wiringGraph, namePattern) {
+    const re = namePattern instanceof RegExp ? namePattern : new RegExp(namePattern, "i");
+    return (wiringGraph?.sheetDiagrams || []).find((sheet) => re.test(sheet.name || ""));
+  }
+
+  function sheetBlockById(sheet, id) {
+    return (sheet?.blocks || []).find((block) => String(block.id) === String(id));
+  }
+
+  function constantValueForBlock(parameters, blockId) {
+    const key = `LogicConstant#${blockId}`;
+    const hit = (parameters || []).find(
+      (param) => param.category === "InternalConstant" && (param.name === key || param.name.endsWith(`#${blockId}`)),
+    );
+    return hit ? hit.value : null;
+  }
+
+  function parseTestModeLabelsFromXml(mainXmlText) {
+    if (!mainXmlText) return { ...DEFAULT_TEST_MODE_LABELS };
+    const labels = { ...DEFAULT_TEST_MODE_LABELS };
+    const textMatch = mainXmlText.match(/TEST\s+MODES([\s\S]{0,1200}?)<\/Text>/i);
+    if (!textMatch) return labels;
+    const body = textMatch[1];
+    const lineRe = /(\d+)\s*[-–:]\s*([^\r\n<]+)/g;
+    let match;
+    while ((match = lineRe.exec(body))) {
+      labels[Number(match[1])] = match[2].replace(/\s+/g, " ").trim();
+    }
+    return labels;
+  }
+
+  function classifyMuxSignal(muxId, wiringGraph, testingCompositeId) {
+    const links = wiringGraph.links || [];
+    for (const link of links) {
+      if (String(link.from.id) !== String(muxId)) continue;
+      const port = (link.to.port || "").toLowerCase();
+      if (port.includes("space")) return "space_temp";
+      if (port.includes("outdoor")) return "outdoor_temp";
+      if (port.includes("discharge") || port.includes("temp_discharge")) return "temp_discharge";
+      if (String(link.to.id) === String(testingCompositeId)) {
+        if (port.includes("space")) return "space_temp";
+        if (port.includes("outdoor")) return "outdoor_temp";
+        if (port.includes("discharge") || port.includes("temp_discharge")) return "temp_discharge";
+      }
+    }
+    return "";
+  }
+
+  function buildMuxModeTable(muxBlockId, sheet, parameters) {
+    const table = {};
+    for (const link of sheet.links || []) {
+      if (String(link.toId) !== String(muxBlockId)) continue;
+      const port = link.toPort || "";
+      const inputMatch = port.match(/^Input(\d+)$/i);
+      if (!inputMatch) continue;
+      const channel = Number(inputMatch[1]);
+      if (channel < 1) continue;
+      const value = constantValueForBlock(parameters, link.fromId);
+      if (value == null || value === "") continue;
+      table[channel] = value;
+    }
+    return table;
+  }
+
+  function occupancyForMode(mode, label) {
+    const text = `${label || ""}`.toLowerCase();
+    if (text.includes("unoccup")) return "Unoccupied";
+    if (text.includes("occup")) return "Occupied";
+    if (mode >= 1 && mode <= 3) return "Unoccupied";
+    if (mode >= 4 && mode <= 6) return "Occupied";
+    return "As scheduled / forced";
+  }
+
+  function scenarioOutcome(mode, space, outdoor, discharge, econoDelta, occupancy) {
+    const spaceN = Number(space);
+    const outdoorN = Number(outdoor);
+    const delta = Number.isFinite(spaceN) && Number.isFinite(outdoorN) ? spaceN - outdoorN : null;
+    const threshold = Number(econoDelta);
+    const econoAllowed = delta != null && Number.isFinite(threshold) ? delta > threshold : null;
+    const label = DEFAULT_TEST_MODE_LABELS[mode] || `Mode ${mode}`;
+    const lower = label.toLowerCase();
+
+    let demand = "Hold / mixed";
+    if (lower.includes("heat")) demand = "Heating";
+    else if (lower.includes("cool") || lower.includes("econo")) demand = "Cooling";
+    else if (lower.includes("freeze")) demand = "Freeze protect";
+
+    let path = "Follow live heat/cool logic";
+    if (econoAllowed === true && demand === "Cooling") {
+      path = "Economizer cooling (outdoor air) preferred over mechanical";
+    } else if (econoAllowed === false && demand === "Cooling") {
+      path = "Economizer blocked → mechanical cooling";
+    } else if (demand === "Heating") {
+      path = "Heating call (economizer not used for heat)";
+    } else if (lower.includes("freeze")) {
+      path = "Freeze protection path";
+    }
+
+    const damper =
+      occupancy === "Occupied"
+        ? "Occupied damper minimum (dmp_min) applies"
+        : occupancy === "Unoccupied"
+          ? "Unoccupied damper minimum (lower / closed bias)"
+          : "Damper follows occupancy + calls";
+
+    return {
+      mode,
+      label,
+      occupancy,
+      temps: { space_temp: space, outdoor_temp: outdoor, temp_discharge: discharge },
+      spaceMinusOutdoor: delta,
+      econoDelta: threshold,
+      econoAllowed,
+      demand,
+      path,
+      damper,
+      steps: [
+        `test_mode = ${mode} forces space ${space}°F, outdoor ${outdoor}°F, discharge ${discharge}°F`,
+        delta == null
+          ? "Economizer compares space − outdoor to econo_delta"
+          : `Economizer: space − outdoor = ${delta}°F ${econoAllowed ? ">" : "≤"} econo_delta (${threshold}°F) → ${econoAllowed ? "allowed" : "blocked"}`,
+        `heat_cool: ${path}`,
+        `ventilate: ${damper}`,
+      ],
+    };
+  }
+
+  /**
+   * Build a first→second→third run-order explanation from GFX wiring
+   * (Testing mux → hubs → Economizer → heat_cool → ventilate).
+   */
+  function buildRunSequence(wiringGraph, parameters = [], options = {}) {
+    if (!wiringGraph) {
+      return { detected: false, reason: "No wiring graph loaded." };
+    }
+
+    const testing = findSheetDiagram(wiringGraph, /^Testing$/i);
+    const economizer = findSheetDiagram(wiringGraph, /^Economizer$/i);
+    const heatCool = findSheetDiagram(wiringGraph, /heat_cool/i);
+    const ventilate = findSheetDiagram(wiringGraph, /ventilate/i);
+    const defaults = paramDefaultMap(parameters);
+    const modeLabels = parseTestModeLabelsFromXml(options.mainXmlText || "");
+    const econoDelta = defaults.get("econo_delta") ?? "8";
+    const dmpMin = defaults.get("dmp_min") ?? "18";
+    const testModeDefault = defaults.get("test_mode") ?? "0";
+
+    const testingComposite = (wiringGraph.composites || []).find((entry) => /^Testing$/i.test(entry.name));
+    const muxBlocks = (testing?.blocks || []).filter((block) => /Multiplexer/i.test(block.tag || ""));
+    const hasTestMode = (testing?.blocks || []).some((block) => /test_mode/i.test(`${block.name} ${block.tagName || ""}`));
+
+    if (!testing || !hasTestMode || muxBlocks.length < 2) {
+      return {
+        detected: false,
+        reason:
+          "This .gfx does not expose a Testing sheet with test_mode multiplexers. Open Signal flow / Block diagram to inspect sheets manually.",
+        sheets: (wiringGraph.sheetDiagrams || []).map((sheet) => sheet.name),
+      };
+    }
+
+    const muxBySignal = {};
+    for (const mux of muxBlocks) {
+      const signal = classifyMuxSignal(mux.id, wiringGraph, testingComposite?.id);
+      const table = buildMuxModeTable(mux.id, testing, parameters);
+      if (signal) muxBySignal[signal] = { blockId: mux.id, modes: table };
+    }
+
+    // Fallback order if port names were missing: space, outdoor, discharge by common template layout
+    if (!muxBySignal.space_temp && muxBlocks[0]) {
+      muxBySignal.space_temp = { blockId: muxBlocks[0].id, modes: buildMuxModeTable(muxBlocks[0].id, testing, parameters) };
+    }
+    if (!muxBySignal.outdoor_temp && muxBlocks[1]) {
+      muxBySignal.outdoor_temp = { blockId: muxBlocks[1].id, modes: buildMuxModeTable(muxBlocks[1].id, testing, parameters) };
+    }
+    if (!muxBySignal.temp_discharge && muxBlocks[2]) {
+      muxBySignal.temp_discharge = { blockId: muxBlocks[2].id, modes: buildMuxModeTable(muxBlocks[2].id, testing, parameters) };
+    }
+
+    const modeNumbers = new Set();
+    Object.values(muxBySignal).forEach((entry) => {
+      Object.keys(entry.modes || {}).forEach((key) => modeNumbers.add(Number(key)));
+    });
+
+    const scenarios = [...modeNumbers]
+      .filter((mode) => mode >= 1 && mode <= 9)
+      .sort((a, b) => a - b)
+      .map((mode) => {
+        const space = muxBySignal.space_temp?.modes?.[mode] ?? "—";
+        const outdoor = muxBySignal.outdoor_temp?.modes?.[mode] ?? "—";
+        const discharge = muxBySignal.temp_discharge?.modes?.[mode] ?? "—";
+        const label = modeLabels[mode] || DEFAULT_TEST_MODE_LABELS[mode] || `Mode ${mode}`;
+        return scenarioOutcome(mode, space, outdoor, discharge, econoDelta, occupancyForMode(mode, label));
+      });
+
+    const econoBlocks = [];
+    if (economizer) {
+      const hasSubtract = (economizer.blocks || []).some((block) => /Subtract/i.test(block.tag));
+      const hasCompare = (economizer.blocks || []).some((block) => /GreaterThan|LessThan/i.test(block.tag));
+      const hasAllowed = (economizer.blocks || []).some((block) => /Allowed/i.test(block.name || ""));
+      const hasLockout = (economizer.blocks || []).some((block) => /Lockout/i.test(block.name || ""));
+      if (hasSubtract) econoBlocks.push({ name: "Subtract", role: "space_temp − outdoor_temp" });
+      if (hasCompare) econoBlocks.push({ name: "GreaterThan", role: `difference > econo_delta (${econoDelta}°F)?` });
+      if (hasAllowed) econoBlocks.push({ name: "Allowed", role: "Switch — enable economizer when cool is wanted and delta is large enough" });
+      if (hasLockout) econoBlocks.push({ name: "Mech Lockout", role: "Switch — force economizer off when lockout is active" });
+      econoBlocks.push({ name: "econo_cool", role: "Output to heat_cool" });
+    }
+
+    const heatCoolBlocks = [];
+    if (heatCool) {
+      if ((heatCool.blocks || []).some((block) => /heat_sense/i.test(block.name || ""))) {
+        heatCoolBlocks.push({ name: "heat_sense", role: "Hysteresis — space too cold → heating demand" });
+      }
+      if ((heatCool.blocks || []).some((block) => /cool_sense/i.test(block.name || ""))) {
+        heatCoolBlocks.push({ name: "cool_sense", role: "Hysteresis — space too hot → cooling demand" });
+      }
+      if ((heatCool.blocks || []).some((block) => /^econo$/i.test(block.name || "") || /Economizer/i.test(block.name || ""))) {
+        heatCoolBlocks.push({ name: "econo / Economizer", role: "Prefer outdoor-air cooling when econo_cool is true" });
+      }
+      if ((heatCool.blocks || []).some((block) => /stages/i.test(block.name || ""))) {
+        heatCoolBlocks.push({ name: "stages", role: "Stage heat-pump / mechanical outputs with delays" });
+      }
+    }
+
+    const ventBlocks = [];
+    if (ventilate) {
+      if ((ventilate.blocks || []).some((block) => /^occ$/i.test(block.name || ""))) {
+        ventBlocks.push({ name: "occ", role: `Occupied → dmp_min (${dmpMin}%); Unoccupied → lower minimum` });
+      }
+      if ((ventilate.blocks || []).some((block) => /Maximum/i.test(block.tag))) {
+        ventBlocks.push({ name: "Maximum", role: "Pick highest damper need (occ / cool / econo / CO₂ / relief)" });
+      }
+      if ((ventilate.blocks || []).some((block) => /freeze/i.test(block.name || ""))) {
+        ventBlocks.push({ name: "freeze", role: "Cut outdoor air if freeze protection is active" });
+      }
+      if ((ventilate.blocks || []).some((block) => /Ramp/i.test(block.tag))) {
+        ventBlocks.push({ name: "Ramp", role: "Smooth damper / outdoor-air command to hardware" });
+      }
+    }
+
+    const stages = [
+      {
+        order: 1,
+        sheet: testing.name,
+        title: "Force or pass temperatures",
+        summary:
+          "test_mode selects Multiplexer channels. Mode 0 = live sensors; modes 1–9 force space / outdoor / discharge for commissioning.",
+        blocks: [
+          { name: "test_mode", role: `BACnet AV (default ${testModeDefault}) — Select input on three Multiplexers` },
+          { name: "Multiplexer ×3", role: "Output space_temp, outdoor_temp, temp_discharge" },
+          { name: "StartDelay / Switch", role: "Settles LCD / SmartVue when test_mode > 1" },
+        ],
+      },
+      {
+        order: 2,
+        sheet: "UV",
+        title: "Broadcast the three temps",
+        summary: "Testing composite writes Reference Hubs. Other sheets only read tags — no mode decisions here.",
+        blocks: [
+          { name: "Testing composite", role: "Exposes space_temp, outdoor_temp, temp_discharge, test_mode" },
+          { name: "Reference Hubs", role: "Fan signals out to Economizer, heat_cool, ventilate, freeze, …" },
+        ],
+      },
+      {
+        order: 3,
+        sheet: economizer?.name || "Economizer",
+        title: "Decide if free cooling is allowed",
+        summary: `Compare space − outdoor to econo_delta (${econoDelta}°F), then apply cool-enable and mechanical lockout.`,
+        blocks: econoBlocks.length
+          ? econoBlocks
+          : [{ name: "(sheet not found)", role: "Economizer sheet missing in this project" }],
+      },
+      {
+        order: 4,
+        sheet: heatCool?.name || "heat_cool",
+        title: "Choose heat / cool / economizer / stages",
+        summary: "Space-temperature senses create heat or cool demand; economizer can satisfy cooling with outdoor air before mechanical stages.",
+        blocks: heatCoolBlocks.length
+          ? heatCoolBlocks
+          : [{ name: "(sheet not found)", role: "heat_cool sheet missing in this project" }],
+      },
+      {
+        order: 5,
+        sheet: ventilate?.name || "ventilate",
+        title: "Move dampers and fans",
+        summary: "Occupancy and heat/cool/econo calls set damper minimums and ramps to outdoor-air / fan outputs.",
+        blocks: ventBlocks.length
+          ? ventBlocks
+          : [{ name: "(sheet not found)", role: "ventilate sheet missing in this project" }],
+      },
+    ];
+
+    return {
+      detected: true,
+      title: "What happens first → second → third",
+      subtitle: "Run order inferred from this .gfx (Testing → hubs → Economizer → heat_cool → ventilate)",
+      overview: [
+        "1. Testing forces or passes space / outdoor / discharge",
+        "2. UV hubs broadcast those tags",
+        "3. Economizer allows or blocks free cooling",
+        "4. heat_cool decides heat vs cool vs econo and stages equipment",
+        "5. ventilate sets damper / fan from occupancy + those calls",
+      ],
+      setpoints: {
+        test_mode: testModeDefault,
+        econo_delta: econoDelta,
+        dmp_min: dmpMin,
+      },
+      stages,
+      scenarios,
+      muxSignals: Object.keys(muxBySignal),
+    };
+  }
+
   return {
     COM_CONFIG_PATH,
     CATEGORY_SECTIONS,
@@ -2252,6 +2586,7 @@ const GfxCore = (() => {
     buildSheetRungs,
     getBlockDisplayInfo,
     friendlyBlockType,
+    buildRunSequence,
   };
 })();
 
