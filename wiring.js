@@ -57,7 +57,7 @@ const closeBtn = document.getElementById("closeBtn");
 const openRungFromFlow = document.getElementById("openRungFromFlow");
 const openRungFromDiagram = document.getElementById("openRungFromDiagram");
 
-const RUNG_VIEW_VERSION = "1.11.0";
+const RUNG_VIEW_VERSION = "1.11.1";
 
 let payload = null;
 let activeTab = "sequence";
@@ -72,6 +72,31 @@ let runSequence = null;
 const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
 
 const core = () => window.GfxCore || {};
+
+function resolveRunSequence(data) {
+  if (data?.runSequence?.detected) return data.runSequence;
+  const gfx = core();
+  if (typeof gfx.buildRunSequence !== "function" || !data?.wiring) {
+    return (
+      data?.runSequence || {
+        detected: false,
+        reason:
+          "Run order engine missing — hard-refresh (Ctrl+F5), reload the .gfx in the editor, then open the wiring viewer again.",
+      }
+    );
+  }
+  const rebuilt = gfx.buildRunSequence(data.wiring, data.sequenceParams || [], {
+    mainXmlText: data.testModeText || "",
+  });
+  if (rebuilt?.detected) return rebuilt;
+  return (
+    rebuilt ||
+    data?.runSequence || {
+      detected: false,
+      reason: "Could not infer Testing → Economizer → heat_cool from this .gfx.",
+    }
+  );
+}
 
 const CATEGORY_COLORS = {
   reference: { fill: "#bbf7d0", stroke: "#15803d" },
@@ -988,14 +1013,18 @@ function renderSequenceScenario(mode) {
 }
 
 function renderSequence() {
-  runSequence = payload?.runSequence || null;
+  runSequence = resolveRunSequence(payload);
+  if (payload) payload.runSequence = runSequence;
   if (!runSequence?.detected) {
     sequenceView.innerHTML = "";
     if (sequenceEmpty) {
       sequenceEmpty.hidden = false;
+      const sheets = (payload?.wiring?.sheetDiagrams || []).map((sheet) => sheet.name).filter(Boolean);
+      const sheetHint = sheets.length ? ` Sheets found: ${sheets.slice(0, 12).join(", ")}${sheets.length > 12 ? "…" : ""}.` : "";
       sequenceEmpty.textContent =
-        runSequence?.reason ||
-        "This project does not expose a Testing → Economizer → heat_cool run order. Use Signal flow or Block diagram instead.";
+        (runSequence?.reason ||
+          "This project does not expose a Testing → Economizer → heat_cool run order. Use Signal flow or Block diagram instead.") +
+        sheetHint;
     }
     return;
   }
@@ -1149,7 +1178,8 @@ async function init() {
   printTitle.textContent = `Logic run order — ${title}`;
   printMeta.textContent = `Exported ${new Date(payload.exportedAt).toLocaleString()} · ${payload.wiring.sheetDiagramCount || 0} sheets · ${payload.wiring.linkCount} wires`;
 
-  runSequence = payload.runSequence || null;
+  runSequence = resolveRunSequence(payload);
+  payload.runSequence = runSequence;
   populateFilters();
   refreshLogicAudit();
   populateAuditSheets();

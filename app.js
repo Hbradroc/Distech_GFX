@@ -1,4 +1,4 @@
-const APP_VERSION = "1.11.0";
+const APP_VERSION = "1.11.1";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -460,11 +460,22 @@ async function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortN
     log("Load a template first to view wiring.");
     return;
   }
-  const runSequence = GfxCore.buildRunSequence
-    ? GfxCore.buildRunSequence(appState.wiringGraph, appState.parameters, {
-        mainXmlText: appState.archive?.mainXmlText || "",
-      })
-    : null;
+  if (typeof GfxCore.buildRunSequence !== "function") {
+    log("Run order unavailable — hard-refresh the page (Ctrl+F5) to load gfx-core v1.11+.");
+  }
+  const runSequence =
+    typeof GfxCore.buildRunSequence === "function"
+      ? GfxCore.buildRunSequence(appState.wiringGraph, appState.parameters, {
+          mainXmlText: appState.archive?.mainXmlText || "",
+        })
+      : { detected: false, reason: "buildRunSequence missing — hard-refresh the page." };
+
+  const sequenceParams = (appState.parameters || []).filter((param) => {
+    if (param.category === "InternalConstant") return true;
+    if (!["test_mode", "econo_delta", "dmp_min"].includes(param.name)) return false;
+    return param.field === "DefaultValue" || param.field === "Default";
+  });
+  const testModeMatch = (appState.archive?.mainXmlText || "").match(/TEST\s+MODES[\s\S]{0,900}/i);
   const payload = {
     projectName: appState.projectName || appState.fileName,
     fileName: appState.fileName,
@@ -474,6 +485,8 @@ async function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortN
     focusPortName: focusPortName || "",
     wiring: appState.wiringGraph,
     runSequence,
+    sequenceParams,
+    testModeText: testModeMatch ? testModeMatch[0] : "",
   };
 
   const storageKey = `${WIRING_STORAGE_PREFIX}${Date.now()}`;
@@ -493,7 +506,11 @@ async function openWiringViewer(focusBlockId = "", focusTagName = "", focusPortN
     return;
   }
   popup.focus();
-  log(`Wiring viewer opened (${storageResult.sizeMb} MB).`);
+  if (runSequence?.detected) {
+    log(`Wiring viewer opened with Run order (${runSequence.scenarios?.length || 0} test modes, ${storageResult.sizeMb} MB).`);
+  } else {
+    log(`Wiring viewer opened (${storageResult.sizeMb} MB). Run order not detected: ${runSequence?.reason || "unknown"}.`);
+  }
 }
 
 function blockIdFromParam(param) {

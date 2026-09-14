@@ -2387,9 +2387,11 @@ const GfxCore = (() => {
 
     const testingComposite = (wiringGraph.composites || []).find((entry) => /^Testing$/i.test(entry.name));
     const muxBlocks = (testing?.blocks || []).filter((block) => /Multiplexer/i.test(block.tag || ""));
-    const hasTestMode = (testing?.blocks || []).some((block) => /test_mode/i.test(`${block.name} ${block.tagName || ""}`));
-
-    if (!testing || !hasTestMode || muxBlocks.length < 2) {
+    const hasTestMode = (testing?.blocks || []).some((block) =>
+      /test_mode/i.test(`${block.name || ""} ${block.tagName || ""} ${block.label || ""}`),
+    );
+    // Multiplexers alone are enough on AMS templates if test_mode naming was stripped in compact storage.
+    if (!testing || muxBlocks.length < 2 || (!hasTestMode && muxBlocks.length < 3)) {
       return {
         detected: false,
         reason:
