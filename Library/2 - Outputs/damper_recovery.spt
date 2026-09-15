@@ -1,0 +1,70 @@
+<SOAP-ENV:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:clr="http://schemas.microsoft.com/soap/encoding/clr/1.0" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+<SOAP-ENV:Body>
+<a1:CodeSnippetPlaceHolder id="ref-1" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.CodeLibrary/DC.Gpl.Model">
+<Snippet href="#ref-3"/>
+<Resources href="#ref-4"/>
+<KeepIndexes>false</KeepIndexes>
+</a1:CodeSnippetPlaceHolder>
+<a2:GraphicalObjectCollection id="ref-3" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<Cnt>1</Cnt>
+<Items href="#ref-5"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a2:GraphicalObjectCollection>
+<a1:ResourceCollection id="ref-4" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.CodeLibrary/DC.Gpl.Model">
+<Cnt>1</Cnt>
+<Items href="#ref-6"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a1:ResourceCollection>
+<SOAP-ENC:Array id="ref-5" SOAP-ENC:arrayType="a2:IGraphicalObject[1]" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<item href="#ref-7"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-6" SOAP-ENC:arrayType="a3:ResourceUsageInfo[1]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Configuration/DC.Gpl.Model">
+<item href="#ref-8"/>
+</SOAP-ENC:Array>
+<a4:BacnetHardwareOutput id="ref-7" xmlns:a4="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks.Bacnet/DC.Gpl.Model">
+<Name id="ref-9">damper_recovery</Name>
+<VER id="ref-10">1</VER>
+<Doc xsi:null="1"/>
+<Bds id="ref-11">1128,372,1248,420</Bds>
+<Props xsi:type="a2:ShapePropertyBag" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<Index id="ref-12">6|1|6</Index>
+</Props>
+<IL xsi:type="xsd:anyType" xsi:null="1"/>
+<OL xsi:type="xsd:anyType" xsi:null="1"/>
+<IPV id="ref-13">Input=1|Priority=0|OnFor=0|AlarmSetpoint=0|Feedback=0|</IPV>
+<OPV id="ref-14">Output=1|TimeLeft=0|Number=0|OutOfService=0|Fault=0|Reliability=0|Priority=0|OverrideSwitch=0|OverridePotentiometer=0|EffectiveOutput=0|InAlarm=0|</OPV>
+<OPF id="ref-15">N=&#34;Output&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EngineeringUnitsFormat&#34; F=&#34;98&#34;|N=&#34;TimeLeft&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EngineeringUnitsFormat&#34; F=&#34;73&#34;|N=&#34;OutOfService&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.BooleanFormat&#34; F=&#34;TRUE;FALSE&#34;|N=&#34;Fault&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.BooleanFormat&#34; F=&#34;TRUE;FALSE&#34;|N=&#34;Reliability&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EnumFormat&#34; F=&#34;GE:ShortStack.Standard.Reliability&#34;|N=&#34;Priority&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EnumFormat&#34; F=&#34;GE:Bacnet.Standard.Priority&#34;|N=&#34;OverrideSwitch&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EnumFormat&#34; F=&#34;GE:ShortStack.Controllers.OverrideSwitch&#34;|N=&#34;OverridePotentiometer&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EngineeringUnitsFormat&#34; F=&#34;5&#34;|N=&#34;EffectiveOutput&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.EngineeringUnitsFormat&#34; F=&#34;98&#34;|N=&#34;InAlarm&#34; T=&#34;Distech.Gpl.Model.Shapes.Blocks.BooleanFormat&#34; F=&#34;TRUE;FALSE&#34;|</OPF>
+</a4:BacnetHardwareOutput>
+<a7:BacnetHardwareOutputResource id="ref-8" xmlns:a7="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Configuration.Bacnet/DC.Gpl.Model">
+<EN>true</EN>
+<IDX>6</IDX>
+<TAG id="ref-16"></TAG>
+<AC>true</AC>
+<NAME href="#ref-9"/>
+<SignalType id="ref-17">3</SignalType>
+<Minimum id="ref-18">2</Minimum>
+<Maximum id="ref-19">10</Maximum>
+<WarmUpTime id="ref-20">0</WarmUpTime>
+<CoolDownTime id="ref-21">0</CoolDownTime>
+<Options id="ref-22">AA==</Options>
+<PwmPeriod id="ref-23">10000</PwmPeriod>
+<Default id="ref-24">0</Default>
+<ObjectName href="#ref-9"/>
+<ObjectUnit id="ref-25">98</ObjectUnit>
+<CovPeriod id="ref-26">300</CovPeriod>
+<CovMinSendTime id="ref-27">0</CovMinSendTime>
+<CovIncrement id="ref-28">5</CovIncrement>
+<ObjectType id="ref-29">0</ObjectType>
+<NumberOfStates id="ref-30">10</NumberOfStates>
+<EnumID id="ref-31">65535</EnumID>
+<AlarmParameters id="ref-32">AAABAAAAAAAAAAAAAAAA4AAA</AlarmParameters>
+<Visible href="#ref-10"/>
+<ForceVisibility id="ref-33">0</ForceVisibility>
+<AlarmEnable href="#ref-33"/>
+</a7:BacnetHardwareOutputResource>
+</SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

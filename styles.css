@@ -69,6 +69,50 @@ h1 {
   line-height: 1.4;
 }
 
+.library-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #efeae0;
+  color: #3d3a34;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.library-status.is-ready {
+  background: #e4efe6;
+  color: #1f4d2c;
+}
+
+.library-status.is-error {
+  background: #f3e4e0;
+  color: #6b2e22;
+}
+
+.library-override {
+  margin-top: 8px;
+}
+
+.library-override summary {
+  cursor: pointer;
+  color: #5c574d;
+  font-size: 0.9rem;
+}
+
+.library-override[open] summary {
+  margin-bottom: 10px;
+}
+
+.library-override label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.library-override .secondary {
+  margin-top: 10px;
+}
+
 .filter-field {
   margin-bottom: 12px;
 }

@@ -11,8 +11,7 @@ parameters.csv
 _extracted_gfx/
 _temp_gfx.zip
 
-# Large local installs / custom libraries (catalog JSON is enough for the app)
-Library/
+# Large local EC-gfxProgram install (CodeLibrary ~100MB) — use Library/ + library-catalog.json instead
 EC-gfxProgram/
 
 # OS / editor

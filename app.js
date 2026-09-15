@@ -1,4 +1,4 @@
-const APP_VERSION = "1.12.0";
+const APP_VERSION = "1.12.1";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -9,6 +9,7 @@ const gfxInput = document.getElementById("gfxFile");
 const libraryFolderInput = document.getElementById("libraryFolder");
 const loadLibraryBtn = document.getElementById("loadLibraryBtn");
 const openLibraryBtn = document.getElementById("openLibraryBtn");
+const libraryStatus = document.getElementById("libraryStatus");
 const focusBlockSearchBtn = document.getElementById("focusBlockSearchBtn");
 const blockSearchInput = document.getElementById("blockSearchInput");
 const blockSearchResults = document.getElementById("blockSearchResults");
@@ -270,18 +271,35 @@ function renderBlockSearch() {
     </div>`;
 }
 
+function setLibraryStatus(message, ok = false) {
+  if (!libraryStatus) return;
+  libraryStatus.textContent = message;
+  libraryStatus.classList.toggle("is-ready", ok);
+  libraryStatus.classList.toggle("is-error", !ok && /fail|missing|could not/i.test(message));
+}
+
 async function loadBundledLibraryCatalog() {
+  setLibraryStatus("Loading Library catalog from repo…");
   try {
     const response = await fetch(LIBRARY_CATALOG_PATH, { cache: "no-store" });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      setLibraryStatus("Library catalog missing — open Optional and load a local Library folder.");
+      return null;
+    }
     const data = await response.json();
-    if (!data?.entries?.length) return null;
+    if (!data?.entries?.length) {
+      setLibraryStatus("Library catalog is empty — open Optional and load a local Library folder.");
+      return null;
+    }
     appState.libraryCatalog = GfxCore.indexLibraryCatalog(data.entries);
-    log(`Loaded bundled library catalog: ${data.entries.length} snippets.`);
+    const sources = Array.isArray(data.generatedFrom) ? data.generatedFrom.join(", ") : "Library";
+    setLibraryStatus(`Library ready · ${data.entries.length} snippets from GitHub (${sources}). No folder upload needed.`, true);
+    log(`Loaded Library catalog from repo: ${data.entries.length} snippets.`);
     refreshLibraryReport();
     rebuildSearchIndex();
     return appState.libraryCatalog;
   } catch {
+    setLibraryStatus("Could not load Library catalog (serve over http / GitHub Pages). Use Optional local folder if needed.");
     return null;
   }
 }
@@ -289,12 +307,14 @@ async function loadBundledLibraryCatalog() {
 async function loadLibraryFolder() {
   clearLog();
   if (!libraryFolderInput?.files?.length) {
-    log("Choose a Library folder (contains .sptx files), then click Load library.");
+    log("Choose a Library folder (contains .sptx files), then click Replace library from folder.");
     return;
   }
 
-  loadLibraryBtn.disabled = true;
-  loadLibraryBtn.textContent = "Indexing…";
+  if (loadLibraryBtn) {
+    loadLibraryBtn.disabled = true;
+    loadLibraryBtn.textContent = "Indexing…";
+  }
   try {
     const files = [...libraryFolderInput.files].filter((file) => /\.sptx$/i.test(file.name));
     if (!files.length) {
@@ -327,7 +347,8 @@ async function loadLibraryFolder() {
     appState.libraryCatalog = GfxCore.indexLibraryCatalog(entries);
     const report = refreshLibraryReport();
     rebuildSearchIndex();
-    log(`Indexed ${entries.length} library snippets${failed ? ` (${failed} skipped)` : ""}.`);
+    setLibraryStatus(`Library replaced from local folder · ${entries.length} snippets.`, true);
+    log(`Indexed ${entries.length} local library snippets${failed ? ` (${failed} skipped)` : ""}.`);
     if (report) {
       log(`Library match vs current .gfx: ${report.matchCount} matched, ${report.unmatchedCount} unmatched.`);
     } else {
@@ -336,8 +357,10 @@ async function loadLibraryFolder() {
   } catch (error) {
     log(`Library index error: ${error.message}`);
   } finally {
-    loadLibraryBtn.disabled = false;
-    loadLibraryBtn.textContent = "Load library";
+    if (loadLibraryBtn) {
+      loadLibraryBtn.disabled = false;
+      loadLibraryBtn.textContent = "Replace library from folder";
+    }
   }
 }
 
@@ -907,8 +930,8 @@ async function loadTemplate() {
       log(
         `Library match: ${libraryReport.matchCount} of ${libraryReport.matchCount + libraryReport.unmatchedCount} modules matched to Library/.sptx — click Open library match.`,
       );
-    } else {
-      log("Optional: Load library folder (.sptx) to see which modules come from your Library.");
+    } else if (!appState.libraryCatalog) {
+      log("Library catalog not loaded yet — wait for repo catalog, or use Optional local folder.");
     }
     log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {

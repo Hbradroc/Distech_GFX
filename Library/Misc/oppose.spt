@@ -1,0 +1,228 @@
+<SOAP-ENV:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:clr="http://schemas.microsoft.com/soap/encoding/clr/1.0" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+<SOAP-ENV:Body>
+<a1:CodeSnippetPlaceHolder id="ref-1" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.CodeLibrary/DC.Gpl.Model">
+<Snippet href="#ref-3"/>
+<Resources xsi:null="1"/>
+<KeepIndexes>false</KeepIndexes>
+</a1:CodeSnippetPlaceHolder>
+<a2:GraphicalObjectCollection id="ref-3" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<Cnt>1</Cnt>
+<Items href="#ref-4"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a2:GraphicalObjectCollection>
+<SOAP-ENC:Array id="ref-4" SOAP-ENC:arrayType="a2:IGraphicalObject[1]" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<item href="#ref-5"/>
+</SOAP-ENC:Array>
+<a3:SimpleCompositeBlock id="ref-5" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<PS xsi:type="a4:Size" xmlns:a4="http://schemas.microsoft.com/clr/nsassem/System.Drawing/System.Drawing">
+<width>1100</width>
+<height>850</height>
+</PS>
+<Name id="ref-7">oppose</Name>
+<VER id="ref-8">1</VER>
+<Doc xsi:null="1"/>
+<Bds id="ref-9">840,648,948,696</Bds>
+<Props xsi:type="xsd:anyType" xsi:null="1"/>
+<IL href="#ref-10"/>
+<OL href="#ref-11"/>
+<IPV id="ref-12">1|</IPV>
+<OPV id="ref-13">1|</OPV>
+<CPS xsi:type="xsd:anyType" xsi:null="1"/>
+<Shps href="#ref-14"/>
+<DP href="#ref-15"/>
+</a3:SimpleCompositeBlock>
+<a3:LinkCollection id="ref-10" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Cnt>1</Cnt>
+<Items href="#ref-16"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a3:LinkCollection>
+<a3:LinkCollection id="ref-11" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Cnt>1</Cnt>
+<Items href="#ref-17"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a3:LinkCollection>
+<a2:ShapeCollection id="ref-14" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<Cnt>3</Cnt>
+<Items href="#ref-18"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a2:ShapeCollection>
+<a7:ArrayList id="ref-15" xmlns:a7="http://schemas.microsoft.com/clr/ns/System.Collections">
+<_items href="#ref-19"/>
+<_size>2</_size>
+<_version>2</_version>
+</a7:ArrayList>
+<SOAP-ENC:Array id="ref-16" SOAP-ENC:arrayType="a3:Link[1]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<item href="#ref-20"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-17" SOAP-ENC:arrayType="a3:Link[1]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<item href="#ref-21"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-18" SOAP-ENC:arrayType="a2:Shape[3]" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<item href="#ref-22"/>
+<item href="#ref-23"/>
+<item href="#ref-24"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-19" SOAP-ENC:arrayType="xsd:anyType[4]">
+<item href="#ref-25"/>
+<item href="#ref-26"/>
+</SOAP-ENC:Array>
+<a3:Link id="ref-20" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<FB href="#ref-22"/>
+<FP id="ref-27">Output</FP>
+<FP_OUT>true</FP_OUT>
+<TB href="#ref-5"/>
+<TP id="ref-28">out</TP>
+<TP_IN>false</TP_IN>
+</a3:Link>
+<a3:Link id="ref-21" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<FB href="#ref-5"/>
+<FP id="ref-29">in</FP>
+<FP_OUT>false</FP_OUT>
+<TB href="#ref-22"/>
+<TP id="ref-30">Input</TP>
+<TP_IN>true</TP_IN>
+</a3:Link>
+<a3:Linear id="ref-22" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Name id="ref-31">Linear</Name>
+<VER href="#ref-8"/>
+<Doc href="#ref-5"/>
+<Bds id="ref-32">588,180,684,276</Bds>
+<Props xsi:type="xsd:anyType" xsi:null="1"/>
+<IL href="#ref-33"/>
+<OL href="#ref-34"/>
+<IPV id="ref-35">1|1|1|1|1|</IPV>
+<OPV id="ref-36">1|</OPV>
+</a3:Linear>
+<a3:InternalConstantNumeric id="ref-23" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Name id="ref-37">Internal Constant</Name>
+<VER href="#ref-8"/>
+<Doc href="#ref-5"/>
+<Bds id="ref-38">504,216,540,228</Bds>
+<Props xsi:type="xsd:anyType" xsi:null="1"/>
+<IL xsi:type="xsd:anyType" xsi:null="1"/>
+<OL href="#ref-39"/>
+<IPV id="ref-40"></IPV>
+<OPV id="ref-41">1|</OPV>
+</a3:InternalConstantNumeric>
+<a3:InternalConstantNumeric id="ref-24" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Name href="#ref-37"/>
+<VER href="#ref-8"/>
+<Doc href="#ref-5"/>
+<Bds id="ref-42">504,240,540,252</Bds>
+<Props xsi:type="a2:ShapePropertyBag" xmlns:a2="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes/DC.Gpl.Model">
+<Value id="ref-43">100</Value>
+</Props>
+<IL xsi:type="xsd:anyType" xsi:null="1"/>
+<OL href="#ref-44"/>
+<IPV href="#ref-40"/>
+<OPV id="ref-45">1|</OPV>
+</a3:InternalConstantNumeric>
+<a3:ExportedInputPort id="ref-25" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Pri>0</Pri>
+<Blk href="#ref-5"/>
+<Name href="#ref-29"/>
+<Type xsi:type="a3:PortType" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">Numeric</Type>
+<Vis>true</Vis>
+<MBC>false</MBC>
+<Bds id="ref-46">84,204,180,216</Bds>
+<CT>0</CT>
+<OV>0</OV>
+</a3:ExportedInputPort>
+<a3:ExportedOutputPort id="ref-26" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<IV>0</IV>
+<Pri>0</Pri>
+<Blk href="#ref-5"/>
+<Name href="#ref-28"/>
+<Type xsi:type="a3:PortType" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">Numeric</Type>
+<Vis>true</Vis>
+<MBC>false</MBC>
+<Bds id="ref-47">888,204,984,216</Bds>
+</a3:ExportedOutputPort>
+<a3:LinkCollection id="ref-33" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Cnt>5</Cnt>
+<Items href="#ref-48"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a3:LinkCollection>
+<a3:LinkCollection id="ref-34" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Cnt>1</Cnt>
+<Items href="#ref-49"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a3:LinkCollection>
+<a3:LinkCollection id="ref-39" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Cnt>2</Cnt>
+<Items href="#ref-50"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a3:LinkCollection>
+<a3:LinkCollection id="ref-44" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<Cnt>2</Cnt>
+<Items href="#ref-51"/>
+<AN>false</AN>
+<AMI>true</AMI>
+<TNV>false</TNV>
+</a3:LinkCollection>
+<SOAP-ENC:Array id="ref-48" SOAP-ENC:arrayType="a3:Link[5]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<item href="#ref-21"/>
+<item href="#ref-52"/>
+<item href="#ref-53"/>
+<item href="#ref-54"/>
+<item href="#ref-55"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-49" SOAP-ENC:arrayType="a3:Link[1]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<item href="#ref-20"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-50" SOAP-ENC:arrayType="a3:Link[2]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<item href="#ref-52"/>
+<item href="#ref-53"/>
+</SOAP-ENC:Array>
+<SOAP-ENC:Array id="ref-51" SOAP-ENC:arrayType="a3:Link[2]" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<item href="#ref-54"/>
+<item href="#ref-55"/>
+</SOAP-ENC:Array>
+<a3:Link id="ref-52" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<FB href="#ref-23"/>
+<FP href="#ref-27"/>
+<FP_OUT>true</FP_OUT>
+<TB href="#ref-22"/>
+<TP id="ref-56">X1</TP>
+<TP_IN>true</TP_IN>
+</a3:Link>
+<a3:Link id="ref-53" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<FB href="#ref-23"/>
+<FP href="#ref-27"/>
+<FP_OUT>true</FP_OUT>
+<TB href="#ref-22"/>
+<TP id="ref-57">Y2</TP>
+<TP_IN>true</TP_IN>
+</a3:Link>
+<a3:Link id="ref-54" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<FB href="#ref-24"/>
+<FP href="#ref-27"/>
+<FP_OUT>true</FP_OUT>
+<TB href="#ref-22"/>
+<TP id="ref-58">X2</TP>
+<TP_IN>true</TP_IN>
+</a3:Link>
+<a3:Link id="ref-55" xmlns:a3="http://schemas.microsoft.com/clr/nsassem/Distech.Gpl.Model.Shapes.Blocks/DC.Gpl.Model">
+<FB href="#ref-24"/>
+<FP href="#ref-27"/>
+<FP_OUT>true</FP_OUT>
+<TB href="#ref-22"/>
+<TP id="ref-59">Y1</TP>
+<TP_IN>true</TP_IN>
+</a3:Link>
+</SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
