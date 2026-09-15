@@ -11,6 +11,10 @@ parameters.csv
 _extracted_gfx/
 _temp_gfx.zip
 
+# Large local installs / custom libraries (catalog JSON is enough for the app)
+Library/
+EC-gfxProgram/
+
 # OS / editor
 .DS_Store
 Thumbs.db

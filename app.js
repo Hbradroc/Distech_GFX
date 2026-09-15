@@ -1,9 +1,19 @@
-const APP_VERSION = "1.11.2";
+const APP_VERSION = "1.12.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
+const LIBRARY_STORAGE_PREFIX = "distechGfxLibrary_";
+const LIBRARY_CATALOG_PATH = `./library-catalog.json?v=${APP_VERSION}`;
 
 const gfxInput = document.getElementById("gfxFile");
+const libraryFolderInput = document.getElementById("libraryFolder");
+const loadLibraryBtn = document.getElementById("loadLibraryBtn");
+const openLibraryBtn = document.getElementById("openLibraryBtn");
+const focusBlockSearchBtn = document.getElementById("focusBlockSearchBtn");
+const blockSearchInput = document.getElementById("blockSearchInput");
+const blockSearchResults = document.getElementById("blockSearchResults");
+const blockSearchDetail = document.getElementById("blockSearchDetail");
+const blockSearchSection = document.getElementById("blockSearchSection");
 const loadBtn = document.getElementById("loadBtn");
 const generateBtn = document.getElementById("generateBtn");
 const generateBtnInline = document.getElementById("generateBtnInline");
@@ -32,6 +42,9 @@ const appState = {
   wiringGraph: null,
   originalSnapshot: new Map(),
   manualEdits: new Set(),
+  libraryCatalog: null,
+  libraryReport: null,
+  searchIndex: null,
 };
 
 let paramHelpCache = null;
@@ -66,10 +79,23 @@ function resetState() {
   appState.wiringGraph = null;
   appState.originalSnapshot = new Map();
   appState.manualEdits = new Set();
+  appState.libraryReport = null;
+  appState.searchIndex = null;
   generateBtn.disabled = true;
   exportCsvBtn.disabled = true;
   if (openWiringBtn) openWiringBtn.disabled = true;
+  if (focusBlockSearchBtn) focusBlockSearchBtn.disabled = true;
+  if (openLibraryBtn) openLibraryBtn.disabled = !appState.libraryCatalog;
   if (wiringLaunch) wiringLaunch.hidden = true;
+  if (blockSearchInput) blockSearchInput.value = "";
+  if (blockSearchResults) {
+    blockSearchResults.hidden = true;
+    blockSearchResults.innerHTML = "";
+  }
+  if (blockSearchDetail) {
+    blockSearchDetail.hidden = true;
+    blockSearchDetail.innerHTML = "";
+  }
   readyHint.hidden = true;
   parameterSection.hidden = true;
   editorList.innerHTML = "";
@@ -83,6 +109,274 @@ function snapshotParameters(parameters) {
     map.set(GfxCore.paramKey(param.source, param.category, param.name, param.field), param.value);
   });
   return map;
+}
+
+function refreshLibraryReport() {
+  if (!appState.wiringGraph || !appState.libraryCatalog) {
+    appState.libraryReport = null;
+    if (openLibraryBtn) openLibraryBtn.disabled = true;
+    return null;
+  }
+  appState.libraryReport = GfxCore.matchLibraryToProject(appState.wiringGraph, appState.libraryCatalog);
+  if (openLibraryBtn) openLibraryBtn.disabled = false;
+  return appState.libraryReport;
+}
+
+function rebuildSearchIndex() {
+  if (!appState.wiringGraph) {
+    appState.searchIndex = null;
+    if (focusBlockSearchBtn) focusBlockSearchBtn.disabled = true;
+    return null;
+  }
+  appState.searchIndex = GfxCore.buildBlockSearchIndex(appState.wiringGraph, appState.libraryCatalog);
+  if (focusBlockSearchBtn) focusBlockSearchBtn.disabled = false;
+  return appState.searchIndex;
+}
+
+function renderBlockDetail(blockId, fallbackName = "", symbolUsages = null) {
+  if (!blockSearchDetail) return;
+  if (!blockId && !fallbackName && !symbolUsages) {
+    blockSearchDetail.hidden = true;
+    blockSearchDetail.innerHTML = "";
+    return;
+  }
+
+  let detail = null;
+  if (blockId && appState.wiringGraph) {
+    detail = GfxCore.describeCustomBlock(appState.wiringGraph, blockId, appState.libraryCatalog);
+  }
+
+  if (!detail) {
+    const libHits = appState.libraryCatalog?.byKey?.get(GfxCore.normalizeLibraryKey(fallbackName)) || [];
+    const entry = libHits[0] || null;
+    const symbol = appState.searchIndex?.byKey?.[GfxCore.normalizeLibraryKey(fallbackName)];
+    if (!entry && !symbol) {
+      blockSearchDetail.hidden = false;
+      blockSearchDetail.innerHTML = `<h3>${escapeHtml(fallbackName || "Block")}</h3><p>No detailed description available yet.</p>`;
+      return;
+    }
+    detail = {
+      name: fallbackName || entry?.title || "Block",
+      sheet: entry?.folder || symbol?.sheets?.[0] || "—",
+      explanation: entry?.description || symbol?.explanation || "",
+      inputs: (entry?.inputs || []).map((port) => ({ port, from: "library export" })),
+      outputs: (entry?.outputs || []).map((port) => ({ port, to: "library export" })),
+      library: entry,
+    };
+  }
+
+  const inputLines = (detail.inputs || [])
+    .slice(0, 12)
+    .map((row) => `<li><strong>${escapeHtml(row.port || "—")}</strong> ← ${escapeHtml(row.from || "")}</li>`)
+    .join("") || "<li>No wired inputs found</li>";
+  const outputLines = (detail.outputs || [])
+    .slice(0, 12)
+    .map((row) => `<li><strong>${escapeHtml(row.port || "—")}</strong> → ${escapeHtml(row.to || "")}</li>`)
+    .join("") || "<li>No wired outputs found</li>";
+  const lib = detail.library;
+  const libBlock = lib
+    ? `<p><strong>Library:</strong> ${escapeHtml(lib.path || lib.title || "")}</p>
+       <p>${escapeHtml(lib.description || "")}</p>`
+    : `<p class="field-hint">No matching Library/.sptx snippet — explanation is inferred from this project.</p>`;
+  const internals = lib?.namedBlocks?.length
+    ? `<h4>Inside this library block</h4><ul>${lib.namedBlocks
+        .slice(0, 16)
+        .map((block) => `<li>${escapeHtml(block.name)} <small>(${escapeHtml(block.tag)})</small></li>`)
+        .join("")}</ul>`
+    : "";
+  const usages = symbolUsages || [];
+  const usageList = usages.length
+    ? `<h4>Where it is used</h4><ul class="usage-list">${usages
+        .slice(0, 30)
+        .map(
+          (usage) =>
+            `<li><button type="button" class="usage-link" data-block-id="${escapeHtml(usage.blockId || "")}" data-name="${escapeHtml(usage.blockName)}"><strong>${escapeHtml(usage.blockName)}</strong> — ${escapeHtml(usage.role)} on ${escapeHtml(usage.sheet)}</button></li>`,
+        )
+        .join("")}</ul>`
+    : "";
+
+  blockSearchDetail.hidden = false;
+  blockSearchDetail.innerHTML = `
+    <h3>${escapeHtml(detail.name)}</h3>
+    <p class="field-hint">Sheet: ${escapeHtml(detail.sheet || "—")}</p>
+    <p>${escapeHtml(detail.explanation || "")}</p>
+    ${libBlock}
+    ${usageList}
+    <div class="block-search-columns">
+      <div><h4>What feeds it</h4><ul>${inputLines}</ul></div>
+      <div><h4>What it controls</h4><ul>${outputLines}</ul></div>
+    </div>
+    ${internals}
+    ${detail.blockId ? `<button type="button" class="secondary help-wiring-link" data-block-id="${escapeHtml(detail.blockId)}">Trace signal flow</button>` : ""}
+  `;
+}
+
+function renderBlockSearch() {
+  if (!blockSearchResults || !blockSearchInput) return;
+  const query = blockSearchInput.value.trim();
+  if (!appState.searchIndex || query.length < 2) {
+    blockSearchResults.hidden = true;
+    blockSearchResults.innerHTML = "";
+    return;
+  }
+
+  const result = GfxCore.searchBlocks(query, appState.searchIndex, appState.libraryCatalog);
+  const symbolCards = result.symbols
+    .slice(0, 12)
+    .map((symbol) => {
+      const usagePreview = symbol.usages
+        .slice(0, 4)
+        .map((usage) => `${usage.role}: ${usage.blockName} (${usage.sheet})`)
+        .join(" · ");
+      return `<button type="button" class="block-hit" data-kind="symbol" data-name="${escapeHtml(symbol.name)}">
+        <strong>${escapeHtml(symbol.name)}</strong>
+        <small>${escapeHtml(symbol.explanation)}</small>
+        <small>${symbol.usageCount} place(s)${usagePreview ? ` — ${escapeHtml(usagePreview)}` : ""}</small>
+      </button>`;
+    })
+    .join("");
+
+  const blockCards = result.blocks
+    .slice(0, 12)
+    .map((block) => `<button type="button" class="block-hit" data-kind="block" data-block-id="${escapeHtml(block.blockId || "")}" data-name="${escapeHtml(block.name)}">
+      <strong>${escapeHtml(block.name)}</strong>
+      <small>${escapeHtml(block.explanation)}</small>
+      <small>Used with ${escapeHtml(block.viaSymbols.join(", "))} · ${escapeHtml(block.sheet || "—")}</small>
+    </button>`)
+    .join("");
+
+  const libraryCards = result.libraryHits
+    .slice(0, 8)
+    .map((hit) => `<button type="button" class="block-hit" data-kind="library" data-name="${escapeHtml(hit.title)}">
+      <strong>${escapeHtml(hit.title)}</strong>
+      <small>${escapeHtml(hit.description)}</small>
+      <small>Library · ${escapeHtml(hit.path)}</small>
+    </button>`)
+    .join("");
+
+  blockSearchResults.hidden = false;
+  blockSearchResults.innerHTML = `
+    <div class="block-hit-group">
+      <h4>Matches in this .gfx (${result.symbols.length})</h4>
+      ${symbolCards || "<p class='field-hint'>No project symbols matched.</p>"}
+    </div>
+    <div class="block-hit-group">
+      <h4>Custom blocks that use it (${result.blocks.length})</h4>
+      ${blockCards || "<p class='field-hint'>No related custom blocks found.</p>"}
+    </div>
+    <div class="block-hit-group">
+      <h4>Library snippets (${result.libraryHits.length})</h4>
+      ${libraryCards || "<p class='field-hint'>No Library/.sptx matches — load the Library folder if needed.</p>"}
+    </div>`;
+}
+
+async function loadBundledLibraryCatalog() {
+  try {
+    const response = await fetch(LIBRARY_CATALOG_PATH, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data?.entries?.length) return null;
+    appState.libraryCatalog = GfxCore.indexLibraryCatalog(data.entries);
+    log(`Loaded bundled library catalog: ${data.entries.length} snippets.`);
+    refreshLibraryReport();
+    rebuildSearchIndex();
+    return appState.libraryCatalog;
+  } catch {
+    return null;
+  }
+}
+
+async function loadLibraryFolder() {
+  clearLog();
+  if (!libraryFolderInput?.files?.length) {
+    log("Choose a Library folder (contains .sptx files), then click Load library.");
+    return;
+  }
+
+  loadLibraryBtn.disabled = true;
+  loadLibraryBtn.textContent = "Indexing…";
+  try {
+    const files = [...libraryFolderInput.files].filter((file) => /\.sptx$/i.test(file.name));
+    if (!files.length) {
+      log("No .sptx files found in that folder.");
+      return;
+    }
+
+    const entries = [];
+    let failed = 0;
+    for (const file of files) {
+      const rel = (file.webkitRelativePath || file.name).replace(/\\/g, "/");
+      const parts = rel.split("/");
+      const stem = file.name.replace(/\.sptx$/i, "");
+      const folder = parts.slice(0, -1).filter((part) => part.toLowerCase() !== "library").join("/");
+      try {
+        const entry = await GfxCore.parseLibrarySnippetFile(file, {
+          path: rel.includes("/") ? rel.replace(/^[^/]+\//, "") : file.name,
+          source: "Library",
+          folder,
+          stem,
+          id: `Library:${rel}`,
+        });
+        entries.push(entry);
+      } catch (error) {
+        failed += 1;
+        if (failed <= 5) log(`Skip ${rel}: ${error.message}`);
+      }
+    }
+
+    appState.libraryCatalog = GfxCore.indexLibraryCatalog(entries);
+    const report = refreshLibraryReport();
+    rebuildSearchIndex();
+    log(`Indexed ${entries.length} library snippets${failed ? ` (${failed} skipped)` : ""}.`);
+    if (report) {
+      log(`Library match vs current .gfx: ${report.matchCount} matched, ${report.unmatchedCount} unmatched.`);
+    } else {
+      log("Load a .gfx template to see where each library function is used.");
+    }
+  } catch (error) {
+    log(`Library index error: ${error.message}`);
+  } finally {
+    loadLibraryBtn.disabled = false;
+    loadLibraryBtn.textContent = "Load library";
+  }
+}
+
+function openLibraryViewer() {
+  const report = refreshLibraryReport();
+  if (!report) {
+    log("Load a .gfx and a Library folder (or library-catalog.json) first.");
+    return;
+  }
+
+  const payload = {
+    projectName: appState.projectName || appState.fileName,
+    fileName: appState.fileName,
+    exportedAt: new Date().toISOString(),
+    report,
+  };
+  const storageKey = `${LIBRARY_STORAGE_PREFIX}${Date.now()}`;
+  try {
+    const serialized = JSON.stringify(payload);
+    localStorage.setItem(storageKey, serialized);
+    localStorage.setItem(`${LIBRARY_STORAGE_PREFIX}latest`, serialized);
+  } catch (error) {
+    log(`Could not store library report (${error.message}).`);
+    return;
+  }
+
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(LIBRARY_STORAGE_PREFIX) && key !== storageKey && key !== `${LIBRARY_STORAGE_PREFIX}latest`) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  const popup = window.open(`library-view.html?v=${APP_VERSION}&key=${encodeURIComponent(storageKey)}`, "_blank", "width=1100,height=900");
+  if (!popup) {
+    log("Popup blocked — allow popups for this site.");
+    return;
+  }
+  popup.focus();
 }
 
 async function loadParamHelp() {
@@ -572,6 +866,8 @@ async function loadTemplate() {
         wiringLaunchText.textContent = `${archive.wiringGraph.crossRefCount || 0} tags · ${archive.wiringGraph.linkCount} wires`;
       }
     }
+    rebuildSearchIndex();
+    if (blockSearchInput?.value.trim()) renderBlockSearch();
 
     renderParameterList();
     parameterSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -606,6 +902,14 @@ async function loadTemplate() {
         `Logic audit: ${audit.summary.likelyBackup} likely backup/Monitor blocks, ${audit.summary.highConfidence} high-confidence dead paths — open wiring viewer → Logic audit tab.`,
       );
     }
+    const libraryReport = refreshLibraryReport();
+    if (libraryReport) {
+      log(
+        `Library match: ${libraryReport.matchCount} of ${libraryReport.matchCount + libraryReport.unmatchedCount} modules matched to Library/.sptx — click Open library match.`,
+      );
+    } else {
+      log("Optional: Load library folder (.sptx) to see which modules come from your Library.");
+    }
     log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {
     log(`Error: ${error.message}`);
@@ -620,6 +924,49 @@ generateBtn.addEventListener("click", generateGfx);
 generateBtnInline.addEventListener("click", generateGfx);
 exportCsvBtn.addEventListener("click", exportCsv);
 if (openWiringBtn) openWiringBtn.addEventListener("click", () => openWiringViewer());
+if (loadLibraryBtn) loadLibraryBtn.addEventListener("click", loadLibraryFolder);
+if (openLibraryBtn) openLibraryBtn.addEventListener("click", openLibraryViewer);
+if (focusBlockSearchBtn) {
+  focusBlockSearchBtn.addEventListener("click", () => {
+    blockSearchSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+    blockSearchInput?.focus();
+  });
+}
+if (blockSearchInput) {
+  blockSearchInput.addEventListener("input", () => {
+    renderBlockSearch();
+  });
+}
+if (blockSearchResults) {
+  blockSearchResults.addEventListener("click", (event) => {
+    const hit = event.target.closest(".block-hit");
+    if (!hit) return;
+    const kind = hit.dataset.kind;
+    const name = hit.dataset.name || "";
+    const blockId = hit.dataset.blockId || "";
+    if (kind === "block" && blockId) {
+      renderBlockDetail(blockId, name);
+      return;
+    }
+    if (kind === "symbol") {
+      const symbol = appState.searchIndex?.byKey?.[GfxCore.normalizeLibraryKey(name)];
+      renderBlockDetail("", name, symbol?.usages || []);
+      return;
+    }
+    renderBlockDetail("", name);
+  });
+}
+if (blockSearchDetail) {
+  blockSearchDetail.addEventListener("click", (event) => {
+    const usage = event.target.closest(".usage-link");
+    if (usage) {
+      renderBlockDetail(usage.dataset.blockId || "", usage.dataset.name || "");
+      return;
+    }
+    const wiring = event.target.closest(".help-wiring-link[data-block-id]");
+    if (wiring) openWiringViewer(wiring.dataset.blockId || "");
+  });
+}
 editorHelp.addEventListener("click", (event) => {
   const tagBtn = event.target.closest("[data-tag-name]");
   if (tagBtn?.dataset.tagName) {
@@ -643,3 +990,6 @@ gfxInput.addEventListener("change", () => {
     loadTemplate();
   }
 });
+
+loadBundledLibraryCatalog();
+loadParamHelp();

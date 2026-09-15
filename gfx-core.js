@@ -2132,6 +2132,556 @@ const GfxCore = (() => {
     return roles.reduce((sum, role) => sum + (weights[role] || 1), 0);
   }
 
+  function normalizeLibraryKey(text) {
+    return String(text || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[_\-]+/g, " ")
+      .replace(/\s+/g, " ");
+  }
+
+  function summarizeSptxBlocks(doc) {
+    const counts = {};
+    const named = [];
+    for (const el of doc.getElementsByTagName("*")) {
+      if (!el.getAttribute?.("id")) continue;
+      const tag = el.tagName;
+      if (["Root", "Namespaces", "Props", "IL", "OL", "Link", "r", "Items", "Cnt"].includes(tag)) continue;
+      if (tag.startsWith("Namespace")) continue;
+      counts[tag] = (counts[tag] || 0) + 1;
+      const name = textContent(el, "Name") || textContent(el, "NAME");
+      if (name && !["Reference Target", "Reference Hub", "Internal Constant", "Monitor"].includes(name)) {
+        named.push({ id: el.getAttribute("id"), tag, name: sanitizeDisplayText(name, name) });
+      }
+    }
+    return { counts, named };
+  }
+
+  function buildLibraryDescription({ title, folder, composites, hardware, tags, counts }) {
+    const parts = [];
+    if (folder) parts.push(`From ${folder}`);
+    if (composites.length) {
+      parts.push(
+        `Logic module with ${composites[0].inputs.length} input(s) and ${composites[0].outputs.length} output(s)`,
+      );
+      if (composites[0].inputs.length) parts.push(`Inputs: ${composites[0].inputs.join(", ")}`);
+      if (composites[0].outputs.length) parts.push(`Outputs: ${composites[0].outputs.join(", ")}`);
+    } else if (hardware.length) {
+      const hw = hardware[0];
+      if (hw.tag.includes("HardwareInput")) {
+        parts.push(`Hardware input "${hw.name}" - reads a physical/controller input into the program`);
+      } else if (hw.tag.includes("HardwareOutput")) {
+        parts.push(`Hardware output "${hw.name}" - drives a physical/controller output`);
+      } else {
+        parts.push(`BACnet object snippet (${hardware.map((entry) => entry.name).join(", ")})`);
+      }
+    }
+    if (tags.length) {
+      parts.push(tags.map((entry) => `${entry.kind === "in" ? "reads" : "defines"} ${entry.tagName}`).join("; "));
+    }
+    const interesting = Object.entries(counts || {})
+      .filter(
+        ([tag]) => !["CodeSnippetPlaceHolder", "Snippet", "Resources", "Props", "ShapePropertyBag"].includes(tag),
+      )
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([tag, count]) => `${tag}×${count}`);
+    if (interesting.length) parts.push(`Contains: ${interesting.join(", ")}`);
+    return parts.join(". ") || `Library snippet ${title}`;
+  }
+
+  function parseLibrarySnippet(mainXmlText, meta = {}) {
+    const doc = parseXml(mainXmlText);
+    const composites = [];
+    for (const block of doc.getElementsByTagName("SimpleCompositeBlock")) {
+      const name = directChild(block, "Name")?.textContent?.trim() || "";
+      if (!name) continue;
+      const inputs = [];
+      const outputs = [];
+      for (const row of block.getElementsByTagName("r")) {
+        const rowType = row.getAttribute("et") || "";
+        const portName = textContent(row, "Name");
+        if (!portName) continue;
+        if (rowType === "ExportedInputPort") inputs.push(portName);
+        if (rowType === "ExportedOutputPort") outputs.push(portName);
+      }
+      composites.push({
+        name,
+        inputs,
+        outputs,
+        linkCount: block.getElementsByTagName("Link").length,
+      });
+    }
+
+    const hardware = [];
+    for (const tag of [
+      "BacnetHardwareOutput",
+      "BacnetHardwareInput",
+      "BacnetAnalogValue",
+      "BacnetBinaryValue",
+    ]) {
+      for (const block of doc.getElementsByTagName(tag)) {
+        const name = textContent(block, "Name") || textContent(block, "NAME");
+        if (name) hardware.push({ tag, name });
+      }
+    }
+
+    const tags = [];
+    for (const block of doc.getElementsByTagName("IncomingTag")) {
+      const tagName = tagNameFromBlock(block);
+      if (tagName) tags.push({ kind: "in", tagName });
+    }
+    for (const block of doc.getElementsByTagName("OutgoingTag")) {
+      const tagName = tagNameFromBlock(block);
+      if (tagName) tags.push({ kind: "out", tagName });
+    }
+
+    const summary = summarizeSptxBlocks(doc);
+    const primary =
+      composites[0]?.name ||
+      hardware[0]?.name ||
+      tags.find((entry) => entry.kind === "out")?.tagName ||
+      meta.stem ||
+      "Untitled snippet";
+
+    const aliases = new Set([primary, meta.stem || "", ...hardware.map((entry) => entry.name)]);
+    // Prefer the primary module name only — nested composites inside a large .sptx
+    // (e.g. MUX.sptx) must not steal matches for other project modules.
+    if (composites.length === 1) aliases.add(composites[0].name);
+    aliases.delete("");
+
+    return {
+      id: meta.id || `${meta.source || "lib"}:${meta.path || primary}`,
+      path: meta.path || "",
+      source: meta.source || "Library",
+      folder: meta.folder || "",
+      stem: meta.stem || "",
+      title: primary,
+      aliases: [...aliases],
+      composites,
+      hardware,
+      tags,
+      inputs: composites[0]?.inputs || [],
+      outputs: composites[0]?.outputs || [],
+      blockSummary: summary.counts,
+      namedBlocks: summary.named.slice(0, 40),
+      linkCount: (mainXmlText.match(/<Link[\s>]/g) || []).length,
+      description: buildLibraryDescription({
+        title: primary,
+        folder: meta.folder || "",
+        composites,
+        hardware,
+        tags,
+        counts: summary.counts,
+      }),
+    };
+  }
+
+  async function parseLibrarySnippetFile(fileOrBuffer, meta = {}) {
+    const buffer = fileOrBuffer instanceof ArrayBuffer ? fileOrBuffer : await fileOrBuffer.arrayBuffer();
+    const zip = await JSZip.loadAsync(buffer);
+    const mainXmlText = await readZipXmlText(zip, "Main.xml");
+    if (!mainXmlText) throw new Error(`No Main.xml in ${meta.path || "snippet"}`);
+    return parseLibrarySnippet(mainXmlText, meta);
+  }
+
+  function indexLibraryCatalog(entries) {
+    const byKey = new Map();
+    for (const entry of entries) {
+      for (const alias of entry.aliases || [entry.title]) {
+        const key = normalizeLibraryKey(alias);
+        if (!key) continue;
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key).push(entry);
+      }
+    }
+    return { entries, byKey };
+  }
+
+  function pickBestLibraryMatch(name, candidates) {
+    if (!candidates?.length) return null;
+    const key = normalizeLibraryKey(name);
+    const exactTitle = candidates.find((entry) => normalizeLibraryKey(entry.title) === key);
+    if (exactTitle) return exactTitle;
+    const exactStem = candidates.find((entry) => normalizeLibraryKey(entry.stem) === key);
+    if (exactStem) return exactStem;
+    return [...candidates].sort(
+      (a, b) => (a.linkCount || 0) - (b.linkCount || 0) || a.path.localeCompare(b.path),
+    )[0];
+  }
+
+  function matchLibraryToProject(wiringGraph, catalog, extraNames = []) {
+    if (!catalog?.entries?.length) {
+      return { matches: [], unmatched: [], catalogSize: 0, matchCount: 0, unmatchedCount: 0 };
+    }
+    const names = new Map();
+    for (const composite of wiringGraph?.composites || []) {
+      names.set(composite.name, {
+        kind: "composite",
+        id: composite.id,
+        sheet: composite.sheet || "",
+        name: composite.name,
+      });
+    }
+    for (const name of extraNames) {
+      if (!name || names.has(name)) continue;
+      names.set(name, { kind: "named", id: "", sheet: "", name });
+    }
+
+    const matches = [];
+    const unmatched = [];
+    for (const [name, usage] of names) {
+      const candidates = catalog.byKey.get(normalizeLibraryKey(name)) || [];
+      const lib = pickBestLibraryMatch(name, candidates);
+      if (!lib) {
+        unmatched.push(usage);
+        continue;
+      }
+      matches.push({
+        projectName: name,
+        projectKind: usage.kind,
+        projectBlockId: usage.id,
+        projectSheet: usage.sheet,
+        library: {
+          id: lib.id,
+          title: lib.title,
+          path: lib.path,
+          source: lib.source,
+          folder: lib.folder,
+          description: lib.description,
+          inputs: lib.inputs,
+          outputs: lib.outputs,
+          tags: lib.tags,
+          blockSummary: lib.blockSummary,
+          namedBlocks: lib.namedBlocks,
+        },
+      });
+    }
+
+    matches.sort((a, b) => a.projectName.localeCompare(b.projectName));
+    unmatched.sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      matches,
+      unmatched,
+      catalogSize: catalog.entries.length,
+      matchCount: matches.length,
+      unmatchedCount: unmatched.length,
+    };
+  }
+
+  function explainBlockKind(tag, name) {
+    if (tag === "IncomingTag") return `Reference in — reads shared tag "${name}" from another sheet`;
+    if (tag === "OutgoingTag") return `Reference out — defines shared tag "${name}" for other sheets`;
+    if (tag.includes("HardwareInput")) return `Hardware input point "${name}" (physical/controller input)`;
+    if (tag.includes("HardwareOutput")) return `Hardware output point "${name}" (drives a physical output)`;
+    if (tag.startsWith("BacnetAnalog") || tag.startsWith("BacnetBinary") || tag.startsWith("BacnetMultiState")) {
+      return `BACnet ${tag.replace(/^Bacnet/, "")} object "${name}"`;
+    }
+    if (tag === "SimpleCompositeBlock") return `Custom logic module "${name}"`;
+    if (tag === "InternalConstantNumeric") return `Internal constant used by nearby logic`;
+    return `${friendlyBlockType(tag)} named "${name}"`;
+  }
+
+  function buildBlockSearchIndex(wiringGraph, libraryCatalog = null) {
+    const symbols = new Map();
+    const blockMeta = new Map();
+
+    function ensureSymbol(name, patch = {}) {
+      if (!name) return null;
+      const key = normalizeLibraryKey(name);
+      if (!symbols.has(key)) {
+        symbols.set(key, {
+          key,
+          name,
+          kinds: new Set(),
+          sheets: new Set(),
+          blockIds: new Set(),
+          usages: [],
+          library: null,
+          explanation: "",
+        });
+      }
+      const entry = symbols.get(key);
+      if (patch.kind) entry.kinds.add(patch.kind);
+      if (patch.sheet) entry.sheets.add(patch.sheet);
+      if (patch.blockId) entry.blockIds.add(patch.blockId);
+      if (patch.usage) entry.usages.push(patch.usage);
+      if (patch.explanation && !entry.explanation) entry.explanation = patch.explanation;
+      return entry;
+    }
+
+    for (const sheet of wiringGraph?.sheetDiagrams || []) {
+      for (const block of sheet.blocks || []) {
+        blockMeta.set(block.id, { ...block, sheet: sheet.name });
+        const display = getBlockDisplayInfo(block);
+        const labels = [block.name, block.tagName, display.title].filter(Boolean);
+        for (const label of labels) {
+          ensureSymbol(label, {
+            kind: block.category || block.tag,
+            sheet: sheet.name,
+            blockId: block.id,
+            explanation: explainBlockKind(block.tag, label),
+            usage: {
+              role: "defined as",
+              sheet: sheet.name,
+              blockId: block.id,
+              blockName: display.title,
+              blockTag: block.tag,
+            },
+          });
+        }
+      }
+    }
+
+    for (const composite of wiringGraph?.composites || []) {
+      ensureSymbol(composite.name, {
+        kind: "composite",
+        sheet: composite.sheet,
+        blockId: composite.id,
+        explanation: `Custom logic module "${composite.name}"`,
+        usage: {
+          role: "custom block",
+          sheet: composite.sheet || "—",
+          blockId: composite.id,
+          blockName: composite.name,
+          blockTag: "SimpleCompositeBlock",
+        },
+      });
+    }
+
+    for (const xref of wiringGraph?.crossReferences || []) {
+      const symbol = ensureSymbol(xref.tagName, {
+        kind: "tag",
+        explanation: `Shared reference tag "${xref.tagName}" (hub/target across sheets)`,
+      });
+      for (const hub of xref.hubs || []) {
+        symbol.sheets.add(hub.sheet);
+        symbol.blockIds.add(hub.blockId);
+        symbol.usages.push({
+          role: "defined on (hub)",
+          sheet: hub.sheet,
+          blockId: hub.blockId,
+          blockName: hub.role || "Reference Hub",
+          blockTag: "OutgoingTag",
+        });
+      }
+      for (const target of xref.targets || []) {
+        symbol.sheets.add(target.sheet);
+        symbol.blockIds.add(target.blockId);
+        symbol.usages.push({
+          role: "used on (target)",
+          sheet: target.sheet,
+          blockId: target.blockId,
+          blockName: target.role || "Reference Target",
+          blockTag: "IncomingTag",
+        });
+      }
+    }
+
+    // Wire-neighbors: if symbol block is wired to a composite, that composite "uses" it.
+    for (const link of wiringGraph?.links || []) {
+      for (const side of [link.from, link.to]) {
+        const other = side === link.from ? link.to : link.from;
+        const key = normalizeLibraryKey(side.name || side.label);
+        if (!key || !symbols.has(key)) continue;
+        if (other.tag !== "SimpleCompositeBlock" && !other.name) continue;
+        const symbol = symbols.get(key);
+        const already = symbol.usages.some(
+          (usage) => usage.blockId === other.id && usage.role.startsWith("wired"),
+        );
+        if (already) continue;
+        symbol.usages.push({
+          role: side === link.from ? "feeds into" : "fed by",
+          sheet: other.sheet || side.sheet || "—",
+          blockId: other.id,
+          blockName: other.name || other.label,
+          blockTag: other.tag,
+          port: side === link.from ? link.to.port : link.from.port,
+        });
+      }
+    }
+
+    if (libraryCatalog?.entries?.length) {
+      for (const entry of symbols.values()) {
+        const candidates = libraryCatalog.byKey.get(entry.key) || [];
+        const lib = pickBestLibraryMatch(entry.name, candidates);
+        if (lib) {
+          entry.library = {
+            title: lib.title,
+            path: lib.path,
+            source: lib.source,
+            folder: lib.folder,
+            description: lib.description,
+            inputs: lib.inputs,
+            outputs: lib.outputs,
+            tags: lib.tags,
+            blockSummary: lib.blockSummary,
+            namedBlocks: lib.namedBlocks,
+          };
+          if (!entry.explanation || entry.explanation.includes("named")) {
+            entry.explanation = lib.description;
+          }
+        }
+      }
+    }
+
+    const list = [...symbols.values()].map((entry) => {
+      const usageKey = new Set();
+      const usages = [];
+      for (const usage of entry.usages) {
+        const key = `${usage.role}|${usage.sheet}|${usage.blockId}|${usage.blockName}`;
+        if (usageKey.has(key)) continue;
+        usageKey.add(key);
+        usages.push(usage);
+      }
+      usages.sort((a, b) => a.sheet.localeCompare(b.sheet) || a.blockName.localeCompare(b.blockName));
+      return {
+        name: entry.name,
+        key: entry.key,
+        kinds: [...entry.kinds],
+        sheets: [...entry.sheets].sort(),
+        blockIds: [...entry.blockIds],
+        usages,
+        usageCount: usages.length,
+        library: entry.library,
+        explanation: entry.explanation || `Symbol "${entry.name}" found in this project`,
+      };
+    });
+
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return { symbols: list, byKey: Object.fromEntries(list.map((entry) => [entry.key, entry])) };
+  }
+
+  function searchBlocks(query, searchIndex, libraryCatalog = null) {
+    const q = normalizeLibraryKey(query);
+    if (!q || q.length < 2) return { query, symbols: [], libraryHits: [], blocks: [] };
+
+    const symbols = (searchIndex?.symbols || []).filter((entry) => {
+      if (entry.key.includes(q) || normalizeLibraryKey(entry.name).includes(q)) return true;
+      return entry.usages.some((usage) => normalizeLibraryKey(usage.blockName).includes(q));
+    });
+
+    const libraryHits = [];
+    if (libraryCatalog?.entries) {
+      for (const entry of libraryCatalog.entries) {
+        const hay = normalizeLibraryKey(
+          [entry.title, entry.stem, entry.path, entry.description, ...(entry.aliases || [])].join(" "),
+        );
+        if (!hay.includes(q)) continue;
+        libraryHits.push({
+          title: entry.title,
+          path: entry.path,
+          source: entry.source,
+          folder: entry.folder,
+          description: entry.description,
+          inputs: entry.inputs,
+          outputs: entry.outputs,
+          tags: entry.tags,
+          blockSummary: entry.blockSummary,
+          namedBlocks: entry.namedBlocks,
+        });
+      }
+    }
+
+    // Related custom blocks from symbol usages
+    const blockMap = new Map();
+    for (const symbol of symbols) {
+      for (const usage of symbol.usages) {
+        if (!usage.blockId && !usage.blockName) continue;
+        if (usage.blockTag && !["SimpleCompositeBlock", "OutgoingTag", "IncomingTag"].includes(usage.blockTag)) {
+          if (!usage.blockTag.includes("Hardware") && usage.role === "defined as") continue;
+        }
+        const id = usage.blockId || usage.blockName;
+        if (!blockMap.has(id)) {
+          blockMap.set(id, {
+            blockId: usage.blockId,
+            name: usage.blockName,
+            tag: usage.blockTag,
+            sheet: usage.sheet,
+            roles: new Set(),
+            viaSymbols: new Set(),
+          });
+        }
+        const block = blockMap.get(id);
+        block.roles.add(usage.role);
+        block.viaSymbols.add(symbol.name);
+      }
+    }
+
+    const blocks = [...blockMap.values()]
+      .map((block) => {
+        const lib =
+          libraryCatalog?.byKey?.get(normalizeLibraryKey(block.name)) ||
+          null;
+        const library = lib ? pickBestLibraryMatch(block.name, lib) : null;
+        return {
+          blockId: block.blockId,
+          name: block.name,
+          tag: block.tag,
+          sheet: block.sheet,
+          roles: [...block.roles],
+          viaSymbols: [...block.viaSymbols],
+          explanation: library?.description || explainBlockKind(block.tag || "SimpleCompositeBlock", block.name),
+          library: library
+            ? {
+                title: library.title,
+                path: library.path,
+                description: library.description,
+                inputs: library.inputs,
+                outputs: library.outputs,
+                blockSummary: library.blockSummary,
+                namedBlocks: library.namedBlocks,
+              }
+            : null,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    symbols.sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name));
+    return { query, symbols: symbols.slice(0, 80), libraryHits: libraryHits.slice(0, 40), blocks: blocks.slice(0, 80) };
+  }
+
+  function describeCustomBlock(wiringGraph, blockId, libraryCatalog = null) {
+    const composite = (wiringGraph?.composites || []).find((entry) => entry.id === blockId);
+    const sheetBlock = (wiringGraph?.sheetDiagrams || [])
+      .flatMap((sheet) => sheet.blocks.map((block) => ({ ...block, sheet: sheet.name })))
+      .find((block) => block.id === blockId);
+    const name = composite?.name || sheetBlock?.name || `Block#${blockId}`;
+    const sheet = composite?.sheet || sheetBlock?.sheet || "—";
+    const flow = tracePortFlow(wiringGraph, blockId, "");
+    const candidates = libraryCatalog?.byKey?.get(normalizeLibraryKey(name)) || [];
+    const library = pickBestLibraryMatch(name, candidates);
+
+    return {
+      blockId,
+      name,
+      sheet,
+      tag: sheetBlock?.tag || "SimpleCompositeBlock",
+      explanation: library?.description || explainBlockKind(sheetBlock?.tag || "SimpleCompositeBlock", name),
+      inputs: flow.inputs.map((row) => ({
+        port: row.port,
+        from: row.from.label,
+        fromSheet: row.from.sheet,
+      })),
+      outputs: flow.outputs.map((row) => ({
+        port: row.port,
+        to: row.to.label,
+        toSheet: row.to.sheet,
+      })),
+      library: library
+        ? {
+            title: library.title,
+            path: library.path,
+            description: library.description,
+            inputs: library.inputs,
+            outputs: library.outputs,
+            blockSummary: library.blockSummary,
+            namedBlocks: library.namedBlocks,
+          }
+        : null,
+    };
+  }
+
   function analyzeNonFunctionalBlocks(wiring) {
     if (!wiring?.links?.length) {
       return { entries: [], summary: { total: 0, highConfidence: 0, monitor: 0, deadOutput: 0 } };
@@ -2589,6 +3139,14 @@ const GfxCore = (() => {
     getBlockDisplayInfo,
     friendlyBlockType,
     buildRunSequence,
+    parseLibrarySnippet,
+    parseLibrarySnippetFile,
+    indexLibraryCatalog,
+    matchLibraryToProject,
+    normalizeLibraryKey,
+    buildBlockSearchIndex,
+    searchBlocks,
+    describeCustomBlock,
   };
 })();
 

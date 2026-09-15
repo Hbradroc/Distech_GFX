@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distech GFX — Library Match</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="library-view.css?v=1.11.0" />
+    <script defer src="library-view.js?v=1.11.0"></script>
+  </head>
+  <body>
+    <header class="lib-toolbar no-print">
+      <div>
+        <h1>Library match viewer</h1>
+        <p id="libSubtitle" class="lib-subtitle">Which project blocks come from your Library .sptx snippets</p>
+      </div>
+      <div class="lib-toolbar-actions">
+        <button type="button" id="printBtn" class="primary">Print / Save PDF</button>
+        <button type="button" id="closeBtn" class="secondary">Close</button>
+      </div>
+    </header>
+
+    <main class="lib-main">
+      <p id="libStats" class="lib-stats"></p>
+      <p class="lib-help">
+        EC-gfxProgram library functions are <code>.sptx</code> snippets (ZIP + Main.xml), not DLL APIs.
+        This view matches <strong>SimpleCompositeBlock</strong> names in your .gfx to snippets under
+        <code>Library/</code> (and optional CodeLibrary).
+      </p>
+
+      <div class="lib-controls no-print">
+        <input type="search" id="libSearch" placeholder="Filter by block or library path…" autocomplete="off" />
+        <label class="lib-toggle">
+          <input type="checkbox" id="showUnmatched" />
+          Show unmatched project modules
+        </label>
+      </div>
+
+      <section id="matchList" class="lib-list" aria-label="Library matches"></section>
+      <section id="detailPanel" class="lib-detail" hidden aria-label="Selected library details"></section>
+      <p id="libEmpty" class="lib-empty" hidden>No library matches for this project yet.</p>
+    </main>
+  </body>
+</html>
