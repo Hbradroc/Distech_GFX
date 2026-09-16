@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "1.19.0";
+  const APP_VERSION = "1.19.1";
   const GRID = 12;
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 4;
@@ -1415,19 +1415,32 @@
       </div>`;
   }
 
+  /**
+   * One collapsible heading per route. Collapsed by default so every path is
+   * visible at once and you can open just the one you care about; the printable
+   * pop-out opens them all instead.
+   */
   function tracePathHtml(path, pathIndex, pathCount, withButtons) {
     const heading = pathCount > 1 ? `Path ${pathIndex + 1} of ${pathCount}` : "Signal path";
+    const openByDefault = !withButtons || pathCount === 1 || pathIndex === 0;
     return `
-      <section class="trace-path">
-        <header class="trace-path-head">
-          <h3>${heading}</h3>
-          <p>${escapeHtml(path.from)} <span class="trace-arrow">→</span> ${escapeHtml(path.to)}</p>
+      <details class="trace-path"${openByDefault ? " open" : ""}>
+        <summary class="trace-path-head">
+          <span class="trace-path-chevron" aria-hidden="true">
+            <svg viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+          </span>
+          <span class="trace-path-text">
+            <span class="trace-path-kicker">${heading} · ${path.steps.length} step${path.steps.length === 1 ? "" : "s"}</span>
+            <span class="trace-path-route">${escapeHtml(path.from)} <span class="trace-arrow">→</span> ${escapeHtml(path.to)}</span>
+          </span>
           ${path.complete
-            ? '<span class="trace-badge ok">Complete input to output</span>'
-            : '<span class="trace-badge">Partial — does not reach a physical output</span>'}
-        </header>
-        ${path.steps.map((step) => traceStepHtml(step, withButtons)).join("")}
-      </section>`;
+            ? '<span class="trace-badge ok">Input to output</span>'
+            : '<span class="trace-badge">Partial</span>'}
+        </summary>
+        <div class="trace-path-body">
+          ${path.steps.map((step) => traceStepHtml(step, withButtons)).join("")}
+        </div>
+      </details>`;
   }
 
   function traceBodyHtml(trace, withButtons) {
@@ -1441,6 +1454,12 @@
         <span>Read in <strong>${trace.consumerCount}</strong> place${trace.consumerCount === 1 ? "" : "s"}</span>
         <span><strong>${trace.paths.length}</strong> path${trace.paths.length === 1 ? "" : "s"} through the logic</span>
         <span>Longest is <strong>${longest}</strong> step${longest === 1 ? "" : "s"}</span>
+        ${withButtons && trace.paths.length > 1
+          ? `<span class="trace-toggles">
+               <button type="button" data-trace-expand>Expand all</button>
+               <button type="button" data-trace-collapse>Collapse all</button>
+             </span>`
+          : ""}
       </div>
       ${trace.truncated
         ? `<p class="trace-note">This signal branches widely. These are the distinct routes found in the first ${MAX_PATHS} explored — there may be more.</p>`
@@ -2100,6 +2119,13 @@ ${traceBodyHtml(trace, false)}
     });
 
     el.traceBody.addEventListener("click", (event) => {
+      if (event.target.closest("[data-trace-expand]") || event.target.closest("[data-trace-collapse]")) {
+        const open = Boolean(event.target.closest("[data-trace-expand]"));
+        el.traceBody.querySelectorAll("details.trace-path").forEach((node) => {
+          node.open = open;
+        });
+        return;
+      }
       const button = event.target.closest("[data-trace-block]");
       if (!button) return;
       closeTrace();

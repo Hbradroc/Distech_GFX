@@ -1159,27 +1159,94 @@ button.secondary {
 }
 
 .trace-path {
-  margin-bottom: 26px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.trace-path[open] {
+  border-color: var(--border-strong);
 }
 
 .trace-path-head {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
-  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  cursor: pointer;
+  list-style: none;
+  background: var(--surface-alt);
 }
 
-.trace-path-head h3 {
-  margin: 0 0 3px;
-  font-size: 13px;
-  text-transform: uppercase;
+.trace-path-head::-webkit-details-marker {
+  display: none;
+}
+
+.trace-path-head:hover {
+  background: var(--accent-soft);
+}
+
+.trace-path-chevron svg {
+  display: block;
+  width: 10px;
+  height: 6px;
+  color: var(--ink-faint);
+  transition: transform 0.15s ease;
+}
+
+.trace-path[open] .trace-path-chevron svg {
+  transform: rotate(180deg);
+}
+
+.trace-path-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.trace-path-kicker {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
   letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--ink-faint);
 }
 
-.trace-path-head p {
-  margin: 0 0 6px;
-  font-size: 14px;
+.trace-path-route {
+  display: block;
+  margin-top: 1px;
+  font-size: 13.5px;
   font-weight: 500;
+  color: var(--ink);
+}
+
+/* Indent the steps so they read as children of the path heading. */
+.trace-path-body {
+  padding: 14px 14px 4px 30px;
+  border-top: 1px solid var(--border);
+}
+
+.trace-toggles {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.trace-toggles button {
+  padding: 2px 9px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.trace-toggles button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .trace-arrow {
