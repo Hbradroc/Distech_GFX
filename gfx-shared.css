@@ -1,4 +1,102 @@
-/* gfx-shared.css — the cross-tool page picker, shared by every page. */
+/*
+ * gfx-shared.css — chrome shared by every page: the tool picker, the credit
+ * line, the day/night toggle, and the dark palette itself.
+ *
+ * The pages sit on two different stylesheets (canvas.css and styles.css) with
+ * different variable names, so the dark block below overrides both sets.
+ */
+
+:root {
+  --gfx-surface: #ffffff;
+  --gfx-surface-alt: #f7f9fc;
+  --gfx-ink: #16202f;
+  --gfx-ink-soft: #55637a;
+  --gfx-ink-faint: #8593a8;
+  --gfx-border: #d5dce7;
+  --gfx-accent: #1d4ed8;
+  --gfx-accent-soft: #e5edff;
+  --gfx-accent-line: #b9ccff;
+}
+
+/* `:root[...]` rather than `[...]`: canvas.css loads after this file and its
+   plain `:root` block would otherwise win the tie on equal specificity. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --gfx-surface: #161f2f;
+  --gfx-surface-alt: #1d2839;
+  --gfx-ink: #e8eef8;
+  --gfx-ink-soft: #a6b3c8;
+  --gfx-ink-faint: #7c8ba3;
+  --gfx-border: #2e3a4d;
+  --gfx-accent: #7ba7ff;
+  --gfx-accent-soft: #1d2b46;
+  --gfx-accent-line: #33507f;
+
+  /* canvas.css palette */
+  --bg: #0e1626;
+  --surface: #161f2f;
+  --surface-alt: #1d2839;
+  --border: #2e3a4d;
+  --border-strong: #41506a;
+  --ink: #e8eef8;
+  --ink-soft: #a6b3c8;
+  --ink-faint: #7c8ba3;
+  --accent: #7ba7ff;
+  --accent-soft: #1d2b46;
+  --danger: #f87171;
+  --danger-soft: #3b1d1d;
+  --danger-strong: #ea580c;
+  --warn: #fbbf24;
+  --warn-soft: #3a2c10;
+  --warn-faint: #2b2210;
+  --warn-line: #b9861f;
+  --warn-ink: #fcd34d;
+  --ok: #4ade80;
+  --ok-soft: #14351f;
+  --ok-faint: #11291a;
+  --accent-line: #33507f;
+  --accent-ink: #b9d0ff;
+  --accent-hover: #9dbcff;
+  /* Accent is a light blue in dark mode, so text sitting on it must be dark. */
+  --accent-on: #0b1220;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  /* The SVG sheet. Block bodies keep their pastel fills in both themes — that
+     is how EC-gfxProgram colour-codes them — so only the paper moves. */
+  --canvas-paper: #121a29;
+  --grid-line: #1e2939;
+  --grid-line-major: #27344a;
+  --wire: #6b7c96;
+  --port-stroke: #8ea0bb;
+  --port-fill: #121a29;
+
+  --chrome-bar: #0b1220;
+  --chrome-bar-ink: #e8eef8;
+  --chrome-bar-soft: #93a3bf;
+
+  /* styles.css palette */
+  --paper: #0e1626;
+  --card: #161f2f;
+  --field: #101a2b;
+  --line: #2e3a4d;
+  --line-soft: #243047;
+  --accent-2: #7ba7ff;
+  --on-accent: #0b1220;
+  --tint-accent: #13303a;
+  --tint-accent-strong: #17404a;
+  --tint-warm: #33270f;
+  --tint-cool: #1d2b46;
+  --tint-paper: #1a2333;
+}
+
+/* styles.css paints warm radial gradients into the body; they read as smears
+   of daylight on a dark page, so flatten them. */
+:root[data-theme="dark"] body {
+  background: var(--paper);
+}
+
+/* ------------------------------------------------------------ tool picker */
 
 .gfx-nav {
   position: relative;
@@ -12,9 +110,9 @@
   padding: 5px 10px;
   font-size: 12.5px;
   font-weight: 500;
-  color: #16202f;
-  background: #ffffff;
-  border: 1px solid #d5dce7;
+  color: var(--gfx-ink);
+  background: var(--gfx-surface);
+  border: 1px solid var(--gfx-border);
   border-radius: 7px;
   cursor: pointer;
   list-style: none;
@@ -26,8 +124,8 @@
 }
 
 .gfx-nav-trigger:hover {
-  border-color: #1d4ed8;
-  color: #1d4ed8;
+  border-color: var(--gfx-accent);
+  color: var(--gfx-accent);
 }
 
 .gfx-nav-trigger svg {
@@ -47,8 +145,8 @@
   z-index: 90;
   min-width: 268px;
   padding: 7px;
-  background: #ffffff;
-  border: 1px solid #d5dce7;
+  background: var(--gfx-surface);
+  border: 1px solid var(--gfx-border);
   border-radius: 10px;
   box-shadow: 0 8px 28px rgba(16, 32, 56, 0.16);
 }
@@ -59,7 +157,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #8593a8;
+  color: var(--gfx-ink-faint);
 }
 
 .gfx-nav-item {
@@ -67,15 +165,15 @@
   padding: 7px 9px;
   border-radius: 7px;
   text-decoration: none;
-  color: #16202f;
+  color: var(--gfx-ink);
 }
 
 .gfx-nav-item:hover {
-  background: #f7f9fc;
+  background: var(--gfx-surface-alt);
 }
 
 .gfx-nav-item.current {
-  background: #e5edff;
+  background: var(--gfx-accent-soft);
 }
 
 .gfx-nav-label {
@@ -88,15 +186,102 @@
   display: block;
   margin-top: 1px;
   font-size: 11.5px;
-  color: #55637a;
+  color: var(--gfx-ink-soft);
 }
 
 .gfx-nav-foot {
   margin: 7px 8px 3px;
   padding-top: 7px;
-  border-top: 1px solid #d5dce7;
+  border-top: 1px solid var(--gfx-border);
   font-size: 11px;
-  color: #8593a8;
+  color: var(--gfx-ink-faint);
+}
+
+/* --------------------------------------------- credit and theme controls */
+
+.gfx-chrome {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.gfx-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  color: var(--gfx-ink-soft);
+  background: var(--gfx-surface);
+  border: 1px solid var(--gfx-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.gfx-theme-toggle:hover {
+  color: var(--gfx-accent);
+  border-color: var(--gfx-accent);
+}
+
+.gfx-theme-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Show the sun while dark, the moon while light — the icon is the destination,
+   not the current state, which is what people reach for. */
+.gfx-theme-toggle .gfx-icon-sun {
+  display: none;
+}
+
+[data-theme="dark"] .gfx-theme-toggle .gfx-icon-sun {
+  display: block;
+}
+
+[data-theme="dark"] .gfx-theme-toggle .gfx-icon-moon {
+  display: none;
+}
+
+.gfx-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+  color: var(--gfx-ink-soft);
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.gfx-credit:hover {
+  color: var(--gfx-accent);
+  border-color: var(--gfx-border);
+}
+
+.gfx-credit svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+
+.gfx-credit strong {
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .gfx-credit-lead {
+    display: none;
+  }
 }
 
 /* Banner offering to pick up the file another tool already opened. */
@@ -108,10 +293,10 @@
   margin: 10px 0;
   padding: 9px 13px;
   font-size: 13px;
-  background: #e5edff;
-  border: 1px solid #b9ccff;
+  background: var(--gfx-accent-soft);
+  border: 1px solid var(--gfx-accent-line);
   border-radius: 8px;
-  color: #16202f;
+  color: var(--gfx-ink);
 }
 
 .gfx-resume button {
@@ -119,14 +304,14 @@
   font-size: 12.5px;
   font-weight: 500;
   color: #ffffff;
-  background: #1d4ed8;
-  border: 1px solid #1d4ed8;
+  background: var(--gfx-accent);
+  border: 1px solid var(--gfx-accent);
   border-radius: 6px;
   cursor: pointer;
 }
 
 .gfx-resume button.ghost {
-  color: #55637a;
+  color: var(--gfx-ink-soft);
   background: transparent;
-  border-color: #b9ccff;
+  border-color: var(--gfx-accent-line);
 }

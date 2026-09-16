@@ -4,15 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Distech GFX Parameter Editor</title>
+    <script>
+      // Set the theme before the first paint, otherwise a dark-mode user gets a
+      // white flash while the deferred scripts load.
+      try {
+        var t = localStorage.getItem("distechGfxTheme");
+        if (t !== "dark" && t !== "light") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="gfx-shared.css?v=1.19.0" />
-    <link rel="stylesheet" href="styles.css?v=1.19.0" />
+    <link rel="stylesheet" href="gfx-shared.css?v=1.22.1" />
+    <link rel="stylesheet" href="styles.css?v=1.22.1" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script defer src="gfx-shared.js?v=1.19.0"></script>
-    <script defer src="gfx-core.js?v=1.19.0"></script>
-    <script defer src="app.js?v=1.19.0"></script>
+    <script defer src="gfx-shared.js?v=1.22.1"></script>
+    <script defer src="gfx-core.js?v=1.22.1"></script>
+    <script defer src="app.js?v=1.22.1"></script>
   </head>
   <body>
     <main class="shell">
@@ -20,12 +29,7 @@
         <div class="card-top">
           <div class="card-top-actions">
             <span data-gfx-nav></span>
-            <a class="email-link" href="mailto:hbradroc@uwo.ca" aria-label="Email hbradroc@uwo.ca">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.2-8 5.2-8-5.2V6l8 5 8-5v2.2Z" />
-              </svg>
-              <span>hbradroc@uwo.ca</span>
-            </a>
+            <span data-gfx-chrome></span>
           </div>
         </div>
 

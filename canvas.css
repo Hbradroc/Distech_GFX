@@ -15,7 +15,29 @@
   --danger-soft: #fee2e2;
   --warn: #92400e;
   --warn-soft: #fef3c7;
+  --warn-faint: #fffbeb;
+  --warn-line: #fbbf24;
+  --warn-ink: #78350f;
   --ok: #15803d;
+  --ok-soft: #dcfce7;
+  --ok-faint: #f0fdf4;
+  --accent-line: #c7d7fe;
+  --accent-ink: #1e3a8a;
+  --accent-hover: #1740b5;
+  --accent-on: #ffffff;
+  --danger-strong: #c2410c;
+  /* The SVG sheet keeps its own palette: block bodies stay in EC-gfxProgram's
+     pastels in both themes, so only the paper, grid, wires and ports move. */
+  --canvas-paper: #fbfcfe;
+  --grid-line: #e3e8f0;
+  --grid-line-major: #d3dae6;
+  --wire: #94a3b8;
+  --port-stroke: #64748b;
+  --port-fill: #ffffff;
+  /* Dark furniture — window title bars, the minimise dock and the toast. */
+  --chrome-bar: #1e293b;
+  --chrome-bar-ink: #ffffff;
+  --chrome-bar-soft: #cbd5f5;
   --topbar-h: 58px;
   --panel-w: 310px;
   --radius: 8px;
@@ -72,13 +94,13 @@ button:disabled {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   font-weight: 500;
 }
 
 button.primary:hover:not(:disabled) {
-  background: #1740b5;
-  border-color: #1740b5;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 button.secondary {
@@ -210,7 +232,7 @@ button.secondary {
   border-radius: 999px;
   background: var(--warn-soft);
   color: var(--warn);
-  border: 1px solid #fcd34d;
+  border: 1px solid var(--warn-line);
   white-space: nowrap;
 }
 
@@ -478,8 +500,8 @@ button.secondary {
 .placement-banner {
   flex: 0 0 auto;
   background: var(--accent-soft);
-  border-bottom: 1px solid #c7d7fe;
-  color: #1e3a8a;
+  border-bottom: 1px solid var(--accent-line);
+  color: var(--accent-ink);
   padding: 8px 14px;
   font-size: 13px;
   display: flex;
@@ -533,22 +555,22 @@ button.secondary {
 /* ------------------------------------------------------------- svg content */
 
 .sheet-bg {
-  fill: #fbfcfe;
+  fill: var(--canvas-paper);
 }
 
 .grid-line {
-  stroke: #e3e8f0;
+  stroke: var(--grid-line);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .grid-line.major {
-  stroke: #d3dae6;
+  stroke: var(--grid-line-major);
 }
 
 .wire {
   fill: none;
-  stroke: #94a3b8;
+  stroke: var(--wire);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
@@ -605,19 +627,19 @@ button.secondary {
 }
 
 .port {
-  stroke: #64748b;
+  stroke: var(--port-stroke);
   stroke-width: 1;
-  fill: #ffffff;
+  fill: var(--port-fill);
   vector-effect: non-scaling-stroke;
 }
 
 .port.connected {
-  fill: #64748b;
+  fill: var(--port-stroke);
 }
 
 .port-label {
   font-family: "Space Grotesk", sans-serif;
-  fill: #64748b;
+  fill: var(--port-stroke);
   pointer-events: none;
   dominant-baseline: middle;
 }
@@ -691,9 +713,9 @@ button.secondary {
 }
 
 .callout {
-  border-left: 3px solid #fbbf24;
+  border-left: 3px solid var(--warn-line);
   background: var(--warn-soft);
-  color: #78350f;
+  color: var(--warn-ink);
   padding: 8px 10px;
   border-radius: 0 6px 6px 0;
   font-size: 12.5px;
@@ -857,8 +879,8 @@ button.secondary {
 }
 
 .verify-row.needs-attention {
-  border-color: #fbbf24;
-  background: #fffbeb;
+  border-color: var(--warn-line);
+  background: var(--warn-faint);
 }
 
 .verify-row-head {
@@ -884,7 +906,7 @@ button.secondary {
 }
 
 .verify-flag.ok {
-  background: #dcfce7;
+  background: var(--ok-soft);
   color: var(--ok);
 }
 
@@ -1005,7 +1027,7 @@ button.secondary {
   font-size: 12.5px;
   line-height: 1.55;
   padding: 9px 11px;
-  background: #f0fdf4;
+  background: var(--ok-faint);
   border-left: 3px solid var(--ok);
   border-radius: 0 6px 6px 0;
 }
@@ -1068,7 +1090,7 @@ button.secondary {
 
 .fit-report.clean {
   border-color: var(--ok);
-  background: #f0fdf4;
+  background: var(--ok-faint);
 }
 
 .fit-verdict {
@@ -1117,7 +1139,7 @@ button.secondary {
 }
 
 .fit-item.ok .fit-badge {
-  background: #dcfce7;
+  background: var(--ok-soft);
   color: var(--ok);
 }
 
@@ -1264,7 +1286,7 @@ button.secondary {
 }
 
 .trace-badge.ok {
-  background: #dcfce7;
+  background: var(--ok-soft);
   color: var(--ok);
 }
 
@@ -1292,7 +1314,7 @@ button.secondary {
   height: 28px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1306,7 +1328,7 @@ button.secondary {
 }
 
 .trace-step.terminal .trace-marker {
-  background: #c2410c;
+  background: var(--danger-strong);
 }
 
 .trace-kicker {
@@ -1381,8 +1403,8 @@ button.secondary {
   bottom: 22px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1e293b;
-  color: #fff;
+  background: var(--chrome-bar);
+  color: var(--chrome-bar-ink);
   padding: 10px 18px;
   border-radius: 999px;
   font-size: 13px;
@@ -1410,8 +1432,8 @@ button.secondary {
   width: 520px;
   max-width: calc(100vw - 32px);
   pointer-events: auto;
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.26);
   overflow: hidden;
@@ -1424,8 +1446,8 @@ button.secondary {
   align-items: baseline;
   gap: 8px;
   padding: 8px 8px 8px 12px;
-  background: #1e293b;
-  color: #fff;
+  background: var(--chrome-bar);
+  color: var(--chrome-bar-ink);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -1445,7 +1467,7 @@ button.secondary {
 
 .block-window-sub {
   font-size: 11px;
-  color: #cbd5f5;
+  color: var(--chrome-bar-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1464,7 +1486,7 @@ button.secondary {
   border: 0;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  color: var(--chrome-bar-ink);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -1483,7 +1505,7 @@ button.secondary {
 .block-window-where {
   margin: 0 0 6px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-soft);
 }
 
 .block-window-plain {
@@ -1495,14 +1517,14 @@ button.secondary {
 
 .mini-diagram {
   display: block;
-  background: var(--surface-2, #f8fafc);
-  border: 1px solid var(--line);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
 .mini-node rect {
-  fill: #fff;
-  stroke: var(--line);
+  fill: var(--surface);
+  stroke: var(--border);
   stroke-width: 1;
 }
 
@@ -1513,12 +1535,12 @@ button.secondary {
 
 .mini-node .mini-port {
   font-size: 9px;
-  fill: var(--muted);
+  fill: var(--ink-soft);
 }
 
 .mini-node.self rect {
-  fill: #eef2ff;
-  stroke: var(--accent, #4f46e5);
+  fill: var(--accent-soft);
+  stroke: var(--accent);
   stroke-width: 1.6;
 }
 
@@ -1528,14 +1550,14 @@ button.secondary {
 
 .mini-node[data-mini-block]:hover rect,
 .mini-node[data-mini-block]:focus rect {
-  stroke: var(--accent, #4f46e5);
+  stroke: var(--accent);
   stroke-width: 1.6;
   outline: none;
 }
 
 .mini-wire {
   fill: none;
-  stroke: #94a3b8;
+  stroke: var(--wire);
   stroke-width: 1.4;
 }
 
@@ -1543,24 +1565,24 @@ button.secondary {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  fill: var(--muted);
+  fill: var(--ink-soft);
 }
 
 .mini-toggle {
   margin: 6px 0 0;
   padding: 5px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
-  color: var(--accent, #4f46e5);
+  background: var(--surface);
+  color: var(--accent);
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .mini-toggle:hover {
-  border-color: var(--accent, #4f46e5);
-  background: #eef2ff;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .block-window-foot {
@@ -1568,13 +1590,13 @@ button.secondary {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  border-top: 1px solid var(--line);
-  background: var(--surface-2, #f8fafc);
+  border-top: 1px solid var(--border);
+  background: var(--surface-alt);
 }
 
 .block-window-hint {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-soft);
 }
 
 .window-dock {
@@ -1587,7 +1609,7 @@ button.secondary {
   flex-wrap: wrap;
   gap: 6px;
   padding: 6px 12px;
-  background: #1e293b;
+  background: var(--chrome-bar);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -1597,7 +1619,7 @@ button.secondary {
   border: 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  color: var(--chrome-bar-ink);
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;

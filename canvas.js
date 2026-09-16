@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "1.20.2";
+  const APP_VERSION = "1.22.1";
   const GRID = 12;
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 4;
@@ -496,22 +496,32 @@
     let pan = null;
     let drag = null;
 
+    // Wheel zooms, middle-drag pans — the EC-gfxProgram convention. Shift+wheel
+    // still nudges sideways because a trackpad has no middle button.
     svg.addEventListener("wheel", (event) => {
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.12 : 1 / 1.12);
+      event.preventDefault();
+      if (event.shiftKey) {
+        state.view.tx -= event.deltaY + event.deltaX;
+        applyView();
         return;
       }
-      event.preventDefault();
-      if (event.shiftKey) state.view.tx -= event.deltaY;
-      else {
-        state.view.tx -= event.deltaX;
-        state.view.ty -= event.deltaY;
-      }
-      applyView();
+      zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.12 : 1 / 1.12);
     }, { passive: false });
 
+    // Chrome starts autoscroll on middle-down unless the default is suppressed.
+    svg.addEventListener("auxclick", (event) => {
+      if (event.button === 1) event.preventDefault();
+    });
+
     svg.addEventListener("pointerdown", (event) => {
+      // Middle button pans from anywhere, including from on top of a block.
+      if (event.button === 1) {
+        event.preventDefault();
+        pan = { x: event.clientX, y: event.clientY, tx: state.view.tx, ty: state.view.ty };
+        el.canvasHost.classList.add("panning");
+        svg.setPointerCapture(event.pointerId);
+        return;
+      }
       if (event.button !== 0) return;
       const world = screenToWorld(event.clientX, event.clientY);
 

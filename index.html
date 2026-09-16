@@ -4,16 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Distech GFX — Logic Canvas</title>
+    <script>
+      // Set the theme before the first paint, otherwise a dark-mode user gets a
+      // white flash while the deferred scripts load.
+      try {
+        var t = localStorage.getItem("distechGfxTheme");
+        if (t !== "dark" && t !== "light") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="gfx-shared.css?v=1.20.2" />
-    <link rel="stylesheet" href="canvas.css?v=1.20.2" />
+    <link rel="stylesheet" href="gfx-shared.css?v=1.22.1" />
+    <link rel="stylesheet" href="canvas.css?v=1.22.1" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script defer src="gfx-shared.js?v=1.20.2"></script>
-    <script defer src="gfx-core.js?v=1.20.2"></script>
-    <script defer src="gfx-edit.js?v=1.20.2"></script>
-    <script defer src="canvas.js?v=1.20.2"></script>
+    <script defer src="gfx-shared.js?v=1.22.1"></script>
+    <script defer src="gfx-core.js?v=1.22.1"></script>
+    <script defer src="gfx-edit.js?v=1.22.1"></script>
+    <script defer src="canvas.js?v=1.22.1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -42,6 +51,7 @@
 
         <span id="dirtyBadge" class="dirty-badge" hidden>Unsaved changes</span>
         <button type="button" id="exportBtn" class="primary" disabled>Export .gfx</button>
+        <span data-gfx-chrome></span>
       </div>
     </header>
 
@@ -106,7 +116,7 @@
           <span><i class="sw sw-composite"></i>Custom block</span>
           <span><i class="sw sw-constant"></i>Constant</span>
           <span class="legend-sep"></span>
-          <span class="legend-tip">Drag to move · Double-click a custom block to open it · Ctrl+wheel to zoom</span>
+          <span class="legend-tip">Wheel to zoom · Middle-drag to pan · Drag a block to move it · Double-click a custom block to open it</span>
         </div>
       </main>
 

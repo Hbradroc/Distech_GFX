@@ -164,13 +164,113 @@
     foot.textContent = name ? `Carrying over: ${name}` : "No file shared yet";
   }
 
+  // --------------------------------------------------- theme and credit ---
+
+  const THEME_KEY = "distechGfxTheme";
+  const AUTHOR = "hbradroc@uwo.ca";
+
+  /**
+   * Saved choice first, otherwise whatever the operating system is set to. The
+   * same logic runs from an inline snippet in each page's <head>; duplicating
+   * it there is what stops a white flash before this deferred script loads.
+   */
+  function preferredTheme() {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "dark" || saved === "light") return saved;
+    } catch (_) {
+      /* private mode */
+    }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function currentTheme() {
+    return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  }
+
+  function applyTheme(theme, remember) {
+    const next = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    if (remember) {
+      try {
+        localStorage.setItem(THEME_KEY, next);
+      } catch (_) {
+        /* private mode — the page still switches, it just will not persist */
+      }
+    }
+    for (const button of document.querySelectorAll("[data-gfx-theme]")) {
+      const goingTo = next === "dark" ? "light" : "dark";
+      button.title = `Switch to ${goingTo} mode`;
+      button.setAttribute("aria-label", button.title);
+      button.setAttribute("aria-pressed", String(next === "dark"));
+    }
+    return next;
+  }
+
+  function toggleTheme() {
+    return applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
+  }
+
+  const ICONS = {
+    moon: '<svg class="gfx-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" /></svg>',
+    sun: '<svg class="gfx-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.2v2.4M12 19.4v2.4M2.2 12h2.4M19.4 12h2.4M5.1 5.1l1.7 1.7M17.2 17.2l1.7 1.7M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7" /></svg>',
+    mail: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.2-8 5.2-8-5.2V6l8 5 8-5v2.2Z" /></svg>',
+  };
+
+  /**
+   * Draw the day/night toggle and the credit into [data-gfx-chrome]. Falls back
+   * to whichever toolbar the page uses so a page only needs the slot if it
+   * wants the cluster somewhere specific.
+   */
+  function renderChrome() {
+    let host = document.querySelector("[data-gfx-chrome]");
+    if (!host) {
+      const bar = document.querySelector(
+        ".topbar-controls, .rung-toolbar-actions, .lib-toolbar-actions, .wiring-toolbar-actions"
+      );
+      if (!bar) return;
+      host = document.createElement("span");
+      bar.appendChild(host);
+    }
+
+    host.innerHTML = `
+      <span class="gfx-chrome">
+        <button type="button" class="gfx-theme-toggle" data-gfx-theme>${ICONS.moon}${ICONS.sun}</button>
+        <a class="gfx-credit" href="mailto:${AUTHOR}" title="Email ${AUTHOR}">
+          ${ICONS.mail}
+          <span><span class="gfx-credit-lead">developed by </span><strong>${AUTHOR}</strong></span>
+        </a>
+      </span>`;
+
+    host.querySelector("[data-gfx-theme]").addEventListener("click", toggleTheme);
+    applyTheme(currentTheme(), false);
+  }
+
+  // Follow the OS while the user has not made a choice of their own.
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", (event) => {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(THEME_KEY);
+    } catch (_) {
+      /* private mode */
+    }
+    if (!saved) applyTheme(event.matches ? "dark" : "light", false);
+  });
+
+  applyTheme(preferredTheme(), false);
+  document.addEventListener("DOMContentLoaded", renderChrome);
+
   window.GfxShared = {
     PAGES,
     renderNav,
+    renderChrome,
     updateNavFile,
     setCurrentFile,
     getCurrentFile,
     currentFileName,
     takeHandoff,
+    applyTheme,
+    toggleTheme,
+    currentTheme,
   };
 })();

@@ -4,14 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Distech GFX — Rung View</title>
+    <script>
+      // Set the theme before the first paint, otherwise a dark-mode user gets a
+      // white flash while the deferred scripts load.
+      try {
+        var t = localStorage.getItem("distechGfxTheme");
+        if (t !== "dark" && t !== "light") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="gfx-shared.css?v=1.19.0" />
-    <link rel="stylesheet" href="rung-view.css?v=1.10.0" />
-    <script defer src="gfx-shared.js?v=1.19.0"></script>
-    <script defer src="gfx-core.js?v=1.10.0"></script>
-    <script defer src="rung-view.js?v=1.10.0"></script>
+    <link rel="stylesheet" href="gfx-shared.css?v=1.22.1" />
+    <link rel="stylesheet" href="rung-view.css?v=1.22.1" />
+    <script defer src="gfx-shared.js?v=1.22.1"></script>
+    <script defer src="gfx-core.js?v=1.22.1"></script>
+    <script defer src="rung-view.js?v=1.22.1"></script>
   </head>
   <body>
     <header class="rung-toolbar no-print">
@@ -21,6 +30,7 @@
       </div>
       <div class="rung-toolbar-actions">
             <span data-gfx-nav></span>
+        <span data-gfx-chrome></span>
         <button type="button" id="printBtn" class="primary">Print / Save PDF</button>
         <button type="button" id="closeBtn" class="secondary">Close</button>
       </div>

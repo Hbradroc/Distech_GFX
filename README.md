@@ -10,6 +10,8 @@ Live site (after GitHub Pages is enabled): `https://hbradroc.github.io/Distech_G
 
 The landing page is the **Logic Canvas**. Every page carries a **Tools** dropdown in its header for switching between the five views, and the `.gfx` you open is shared between them — open a file once and each tool offers to pick it up.
 
+Every page also has a day/night toggle in the top right. It starts on whatever your operating system is set to and remembers your choice across pages and visits.
+
 | Tool | Page | What it is for |
 |------|------|----------------|
 | Logic Canvas | `index.html` | Interactive diagram: pan/zoom, drill into custom blocks, trace a signal, insert library blocks, export |
@@ -20,6 +22,7 @@ The landing page is the **Logic Canvas**. Every page carries a **Tools** dropdow
 
 ### Logic Canvas
 
+- **Move around.** The wheel zooms under the pointer and holding the middle mouse button drags the sheet in any direction, the same as EC-gfxProgram. Left-drag a block to move it, shift+wheel nudges sideways for trackpads, and **Fit** frames the whole sheet.
 - **See the logic.** Sheets render as an interactive SVG diagram. Double-click a custom block to open its internals; the breadcrumb, an **↑ Back** button or `Esc` takes you back out.
 - **Understand a block.** Selecting a block explains it in plain terms, with a step-by-step account of how it evaluates, truth tables for the logic and comparator blocks, a worked example, and what happens when an input is Null. Behavioural facts come from the EC-gfxProgram help file and each entry cites its source topic.
 - **Trace a signal.** Pick any reference tag and get the end-to-end routes it takes, from a physical input, through the logic, across sheet boundaries via reference hubs and targets, to the output it eventually drives. Duplicate routes are collapsed, and any step can jump the canvas straight to that block.
