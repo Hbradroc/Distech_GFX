@@ -2071,6 +2071,106 @@ const GfxCore = (() => {
     };
   }
 
+  function collectFocusBlockIds(wiringGraph, { blockId = "", symbolName = "", extraBlockIds = [] } = {}) {
+    const focusIds = new Set([...extraBlockIds].filter(Boolean).map(String));
+    if (blockId) focusIds.add(String(blockId));
+
+    const key = normalizeLibraryKey(symbolName);
+    if (!key) return focusIds;
+
+    for (const sheet of wiringGraph?.sheetDiagrams || []) {
+      for (const block of sheet.blocks || []) {
+        const names = [block.name, block.label, block.tagName]
+          .map((value) => normalizeLibraryKey(value))
+          .filter(Boolean);
+        if (names.some((name) => name === key || name.includes(key))) {
+          focusIds.add(String(block.id));
+        }
+      }
+    }
+
+    for (const xref of wiringGraph?.crossReferences || []) {
+      if (normalizeLibraryKey(xref.tagName) !== key) continue;
+      for (const hub of xref.hubs || []) {
+        if (hub.blockId) focusIds.add(String(hub.blockId));
+      }
+      for (const target of xref.targets || []) {
+        if (target.blockId) focusIds.add(String(target.blockId));
+      }
+    }
+
+    for (const composite of wiringGraph?.composites || []) {
+      if (normalizeLibraryKey(composite.name) === key && composite.id) {
+        focusIds.add(String(composite.id));
+      }
+    }
+
+    return focusIds;
+  }
+
+  function annotateLogicSteps(steps, focusIds) {
+    return steps.map((step, index) => {
+      const isFocus = focusIds.has(String(step.blockId));
+      const isSource = index === 0 && !isFocus;
+      const isOutput = index === steps.length - 1 && !isFocus;
+      return {
+        ...step,
+        focus: isFocus,
+        roleHint: isFocus ? "selected" : isSource ? "feeds in" : isOutput ? "controls / drives" : "",
+      };
+    });
+  }
+
+  function buildFocusedLogicRungs(wiringGraph, options = {}) {
+    const focusIds = collectFocusBlockIds(wiringGraph, options);
+    if (!focusIds.size || !wiringGraph?.sheetDiagrams?.length) {
+      return {
+        focusIds: [...focusIds],
+        sheetCount: 0,
+        rungCount: 0,
+        sheets: [],
+      };
+    }
+
+    const sheets = [];
+    let rungCount = 0;
+
+    for (const sheet of wiringGraph.sheetDiagrams) {
+      const layout = buildSheetRungs(sheet);
+      const matched = layout.rungs
+        .filter((rung) => rung.steps.some((step) => focusIds.has(String(step.blockId))))
+        .map((rung, index) => {
+          const steps = annotateLogicSteps(rung.steps, focusIds);
+          const focusIndex = steps.findIndex((step) => step.focus);
+          const feeds = focusIndex > 0 ? steps.slice(0, focusIndex) : [];
+          const controls = focusIndex >= 0 ? steps.slice(focusIndex + 1) : steps.slice(1);
+          return {
+            number: index + 1,
+            orphan: !!rung.orphan,
+            steps,
+            feeds,
+            controls,
+            focusTitles: steps.filter((step) => step.focus).map((step) => step.title),
+          };
+        });
+
+      if (!matched.length) continue;
+      rungCount += matched.length;
+      sheets.push({
+        sheetName: layout.sheetName,
+        docId: layout.docId,
+        rungs: matched,
+      });
+    }
+
+    return {
+      focusIds: [...focusIds],
+      sheetCount: sheets.length,
+      rungCount,
+      sheets,
+    };
+  }
+
   function buildWiringBlockMeta(wiring) {
     const meta = new Map();
     function ingest(id, tag, name, label, sheet, tagName = "") {
@@ -2556,10 +2656,30 @@ const GfxCore = (() => {
     const q = normalizeLibraryKey(query);
     if (!q || q.length < 2) return { query, symbols: [], libraryHits: [], blocks: [] };
 
-    const symbols = (searchIndex?.symbols || []).filter((entry) => {
-      if (entry.key.includes(q) || normalizeLibraryKey(entry.name).includes(q)) return true;
-      return entry.usages.some((usage) => normalizeLibraryKey(usage.blockName).includes(q));
-    });
+    function nameMatchScore(text) {
+      const key = normalizeLibraryKey(text);
+      if (!key) return 0;
+      if (key === q) return 100;
+      if (key.startsWith(q)) return 70;
+      if (key.includes(q)) return 45;
+      return 0;
+    }
+
+    // A symbol matches by its own name, or only through the blocks it is used on.
+    // Name matches rank first; usage-only matches show just the usages that match.
+    const symbols = [];
+    for (const entry of searchIndex?.symbols || []) {
+      const nameScore = Math.max(nameMatchScore(entry.key), nameMatchScore(entry.name));
+      const matchedUsages = entry.usages.filter((usage) => nameMatchScore(usage.blockName) > 0);
+      if (!nameScore && !matchedUsages.length) continue;
+      const usages = nameScore ? entry.usages : matchedUsages;
+      symbols.push({
+        ...entry,
+        usages,
+        usageCount: usages.length,
+        score: nameScore + (matchedUsages.length ? 15 : 0),
+      });
+    }
 
     const libraryHits = [];
     if (libraryCatalog?.entries) {
@@ -2635,9 +2755,12 @@ const GfxCore = (() => {
             : null,
         };
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort(
+        (a, b) =>
+          nameMatchScore(b.name) - nameMatchScore(a.name) || a.name.localeCompare(b.name),
+      );
 
-    symbols.sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name));
+    symbols.sort((a, b) => b.score - a.score || b.usageCount - a.usageCount || a.name.localeCompare(b.name));
     return { query, symbols: symbols.slice(0, 80), libraryHits: libraryHits.slice(0, 40), blocks: blocks.slice(0, 80) };
   }
 
@@ -3139,6 +3262,7 @@ const GfxCore = (() => {
     getBlockDisplayInfo,
     friendlyBlockType,
     buildRunSequence,
+    buildFocusedLogicRungs,
     parseLibrarySnippet,
     parseLibrarySnippetFile,
     indexLibraryCatalog,

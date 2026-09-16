@@ -1,4 +1,4 @@
-const APP_VERSION = "1.12.1";
+const APP_VERSION = "1.13.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -9,12 +9,16 @@ const gfxInput = document.getElementById("gfxFile");
 const libraryFolderInput = document.getElementById("libraryFolder");
 const loadLibraryBtn = document.getElementById("loadLibraryBtn");
 const openLibraryBtn = document.getElementById("openLibraryBtn");
-const libraryStatus = document.getElementById("libraryStatus");
 const focusBlockSearchBtn = document.getElementById("focusBlockSearchBtn");
 const blockSearchInput = document.getElementById("blockSearchInput");
 const blockSearchResults = document.getElementById("blockSearchResults");
 const blockSearchDetail = document.getElementById("blockSearchDetail");
 const blockSearchSection = document.getElementById("blockSearchSection");
+const blockDetailOverlay = document.getElementById("blockDetailOverlay");
+const detailOverlayTitle = document.getElementById("detailOverlayTitle");
+const detailMinimizeBtn = document.getElementById("detailMinimizeBtn");
+const detailRestoreBtn = document.getElementById("detailRestoreBtn");
+const detailRestoreName = document.getElementById("detailRestoreName");
 const loadBtn = document.getElementById("loadBtn");
 const generateBtn = document.getElementById("generateBtn");
 const generateBtnInline = document.getElementById("generateBtnInline");
@@ -93,10 +97,7 @@ function resetState() {
     blockSearchResults.hidden = true;
     blockSearchResults.innerHTML = "";
   }
-  if (blockSearchDetail) {
-    blockSearchDetail.hidden = true;
-    blockSearchDetail.innerHTML = "";
-  }
+  hideBlockDetailOverlay();
   readyHint.hidden = true;
   parameterSection.hidden = true;
   editorList.innerHTML = "";
@@ -123,6 +124,40 @@ function refreshLibraryReport() {
   return appState.libraryReport;
 }
 
+function showBlockDetailOverlay(title) {
+  if (!blockDetailOverlay) return;
+  if (detailOverlayTitle) detailOverlayTitle.textContent = title || "Block detail";
+  if (detailRestoreName) detailRestoreName.textContent = title || "block detail";
+  if (detailRestoreBtn) detailRestoreBtn.hidden = true;
+  const wasOpen = !blockDetailOverlay.hidden;
+  blockDetailOverlay.hidden = false;
+  document.body.classList.add("detail-open");
+  blockSearchDetail.scrollTop = 0;
+  if (!wasOpen && history.state?.blockDetail !== true) {
+    history.pushState({ blockDetail: true }, "");
+  }
+}
+
+function hideBlockDetailOverlay({ keepContent = false, fromHistory = false } = {}) {
+  if (!blockDetailOverlay) return;
+  const wasOpen = !blockDetailOverlay.hidden;
+  blockDetailOverlay.hidden = true;
+  document.body.classList.remove("detail-open");
+  if (!keepContent) {
+    blockSearchDetail.innerHTML = "";
+    if (detailRestoreBtn) detailRestoreBtn.hidden = true;
+  }
+  if (wasOpen && !fromHistory && history.state?.blockDetail === true) {
+    history.back();
+  }
+}
+
+function minimizeBlockDetailOverlay() {
+  if (!blockDetailOverlay || blockDetailOverlay.hidden) return;
+  hideBlockDetailOverlay({ keepContent: true });
+  if (detailRestoreBtn) detailRestoreBtn.hidden = false;
+}
+
 function rebuildSearchIndex() {
   if (!appState.wiringGraph) {
     appState.searchIndex = null;
@@ -134,11 +169,61 @@ function rebuildSearchIndex() {
   return appState.searchIndex;
 }
 
+function renderLogicLadderHtml(logic) {
+  if (!logic?.sheets?.length) {
+    return `<div class="logic-ladder-section"><h4>Ladder logic</h4><p class="field-hint">No ladder rungs found for this selection in the loaded .gfx.</p></div>`;
+  }
+
+  const sheets = logic.sheets
+    .map((sheet) => {
+      const rungs = sheet.rungs
+        .map((rung) => {
+          const steps = rung.steps
+            .map((step, index) => {
+              const classes = ["logic-rung-block"];
+              if (step.focus) classes.push("is-focus");
+              else if (index === 0) classes.push("is-source");
+              else if (index === rung.steps.length - 1) classes.push("is-output");
+              const role = step.roleHint ? `<small>${escapeHtml(step.roleHint)}</small>` : "";
+              const portHint =
+                step.inPort || step.outPort
+                  ? `<small>${escapeHtml(
+                      [step.inPort ? `in ${step.inPort}` : "", step.outPort ? `out ${step.outPort}` : ""]
+                        .filter(Boolean)
+                        .join(" · "),
+                    )}</small>`
+                  : "";
+              const block = `<div class="${classes.join(" ")}">
+                <strong>${escapeHtml(step.title)}</strong>
+                <small>${escapeHtml(step.subtitle || "")}</small>
+                ${role}
+                ${portHint}
+              </div>`;
+              return index === 0 ? block : `<span class="logic-rung-wire" aria-hidden="true">→</span>${block}`;
+            })
+            .join("");
+          return `<div class="logic-rung"><div class="logic-rung-num">${rung.number}</div><div class="logic-rung-steps">${steps}</div></div>`;
+        })
+        .join("");
+      return `<div class="logic-ladder-sheet">
+        <h5>${escapeHtml(sheet.sheetName)}</h5>
+        <p class="field-hint">Left side feeds in · highlighted block is the selection · right side is what it controls</p>
+        <div class="logic-ladder">${rungs}</div>
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="logic-ladder-section">
+    <h4>Ladder logic</h4>
+    <p class="field-hint">${logic.rungCount} related rung${logic.rungCount === 1 ? "" : "s"} across ${logic.sheetCount} sheet${logic.sheetCount === 1 ? "" : "s"}</p>
+    ${sheets}
+  </div>`;
+}
+
 function renderBlockDetail(blockId, fallbackName = "", symbolUsages = null) {
   if (!blockSearchDetail) return;
   if (!blockId && !fallbackName && !symbolUsages) {
-    blockSearchDetail.hidden = true;
-    blockSearchDetail.innerHTML = "";
+    hideBlockDetailOverlay();
     return;
   }
 
@@ -152,8 +237,8 @@ function renderBlockDetail(blockId, fallbackName = "", symbolUsages = null) {
     const entry = libHits[0] || null;
     const symbol = appState.searchIndex?.byKey?.[GfxCore.normalizeLibraryKey(fallbackName)];
     if (!entry && !symbol) {
-      blockSearchDetail.hidden = false;
       blockSearchDetail.innerHTML = `<h3>${escapeHtml(fallbackName || "Block")}</h3><p>No detailed description available yet.</p>`;
+      showBlockDetailOverlay(fallbackName || "Block");
       return;
     }
     detail = {
@@ -196,12 +281,21 @@ function renderBlockDetail(blockId, fallbackName = "", symbolUsages = null) {
         .join("")}</ul>`
     : "";
 
-  blockSearchDetail.hidden = false;
+  const logic = appState.wiringGraph
+    ? GfxCore.buildFocusedLogicRungs(appState.wiringGraph, {
+        blockId: detail.blockId || blockId || "",
+        symbolName: detail.name || fallbackName || "",
+        extraBlockIds: usages.map((usage) => usage.blockId).filter(Boolean),
+      })
+    : null;
+  const ladderHtml = renderLogicLadderHtml(logic);
+
   blockSearchDetail.innerHTML = `
     <h3>${escapeHtml(detail.name)}</h3>
     <p class="field-hint">Sheet: ${escapeHtml(detail.sheet || "—")}</p>
     <p>${escapeHtml(detail.explanation || "")}</p>
     ${libBlock}
+    ${ladderHtml}
     ${usageList}
     <div class="block-search-columns">
       <div><h4>What feeds it</h4><ul>${inputLines}</ul></div>
@@ -210,6 +304,7 @@ function renderBlockDetail(blockId, fallbackName = "", symbolUsages = null) {
     ${internals}
     ${detail.blockId ? `<button type="button" class="secondary help-wiring-link" data-block-id="${escapeHtml(detail.blockId)}">Trace signal flow</button>` : ""}
   `;
+  showBlockDetailOverlay(detail.name);
 }
 
 function renderBlockSearch() {
@@ -271,35 +366,17 @@ function renderBlockSearch() {
     </div>`;
 }
 
-function setLibraryStatus(message, ok = false) {
-  if (!libraryStatus) return;
-  libraryStatus.textContent = message;
-  libraryStatus.classList.toggle("is-ready", ok);
-  libraryStatus.classList.toggle("is-error", !ok && /fail|missing|could not/i.test(message));
-}
-
 async function loadBundledLibraryCatalog() {
-  setLibraryStatus("Loading Library catalog from repo…");
   try {
     const response = await fetch(LIBRARY_CATALOG_PATH, { cache: "no-store" });
-    if (!response.ok) {
-      setLibraryStatus("Library catalog missing — open Optional and load a local Library folder.");
-      return null;
-    }
+    if (!response.ok) return null;
     const data = await response.json();
-    if (!data?.entries?.length) {
-      setLibraryStatus("Library catalog is empty — open Optional and load a local Library folder.");
-      return null;
-    }
+    if (!data?.entries?.length) return null;
     appState.libraryCatalog = GfxCore.indexLibraryCatalog(data.entries);
-    const sources = Array.isArray(data.generatedFrom) ? data.generatedFrom.join(", ") : "Library";
-    setLibraryStatus(`Library ready · ${data.entries.length} snippets from GitHub (${sources}). No folder upload needed.`, true);
-    log(`Loaded Library catalog from repo: ${data.entries.length} snippets.`);
     refreshLibraryReport();
     rebuildSearchIndex();
     return appState.libraryCatalog;
   } catch {
-    setLibraryStatus("Could not load Library catalog (serve over http / GitHub Pages). Use Optional local folder if needed.");
     return null;
   }
 }
@@ -345,15 +422,9 @@ async function loadLibraryFolder() {
     }
 
     appState.libraryCatalog = GfxCore.indexLibraryCatalog(entries);
-    const report = refreshLibraryReport();
+    refreshLibraryReport();
     rebuildSearchIndex();
-    setLibraryStatus(`Library replaced from local folder · ${entries.length} snippets.`, true);
     log(`Indexed ${entries.length} local library snippets${failed ? ` (${failed} skipped)` : ""}.`);
-    if (report) {
-      log(`Library match vs current .gfx: ${report.matchCount} matched, ${report.unmatchedCount} unmatched.`);
-    } else {
-      log("Load a .gfx template to see where each library function is used.");
-    }
   } catch (error) {
     log(`Library index error: ${error.message}`);
   } finally {
@@ -925,14 +996,7 @@ async function loadTemplate() {
         `Logic audit: ${audit.summary.likelyBackup} likely backup/Monitor blocks, ${audit.summary.highConfidence} high-confidence dead paths — open wiring viewer → Logic audit tab.`,
       );
     }
-    const libraryReport = refreshLibraryReport();
-    if (libraryReport) {
-      log(
-        `Library match: ${libraryReport.matchCount} of ${libraryReport.matchCount + libraryReport.unmatchedCount} modules matched to Library/.sptx — click Open library match.`,
-      );
-    } else if (!appState.libraryCatalog) {
-      log("Library catalog not loaded yet — wait for repo catalog, or use Optional local folder.");
-    }
+    refreshLibraryReport();
     log("Edit job setpoints below. Enable Other variables for logic constants, BACnet metadata, and com sensor registers.");
   } catch (error) {
     log(`Error: ${error.message}`);
@@ -990,6 +1054,28 @@ if (blockSearchDetail) {
     if (wiring) openWiringViewer(wiring.dataset.blockId || "");
   });
 }
+if (blockDetailOverlay) {
+  blockDetailOverlay.addEventListener("click", (event) => {
+    if (event.target.closest("[data-detail-close]")) hideBlockDetailOverlay();
+  });
+}
+if (detailMinimizeBtn) detailMinimizeBtn.addEventListener("click", minimizeBlockDetailOverlay);
+if (detailRestoreBtn) {
+  detailRestoreBtn.addEventListener("click", () => {
+    showBlockDetailOverlay(detailOverlayTitle?.textContent || "");
+  });
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && blockDetailOverlay && !blockDetailOverlay.hidden) {
+    hideBlockDetailOverlay();
+  }
+});
+window.addEventListener("popstate", () => {
+  if (blockDetailOverlay && !blockDetailOverlay.hidden) {
+    hideBlockDetailOverlay({ keepContent: true, fromHistory: true });
+    if (detailRestoreBtn) detailRestoreBtn.hidden = false;
+  }
+});
 editorHelp.addEventListener("click", (event) => {
   const tagBtn = event.target.closest("[data-tag-name]");
   if (tagBtn?.dataset.tagName) {

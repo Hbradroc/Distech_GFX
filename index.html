@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script defer src="gfx-core.js?v=1.12.1"></script>
-    <script defer src="app.js?v=1.12.1"></script>
+    <script defer src="gfx-core.js?v=1.13.0"></script>
+    <script defer src="app.js?v=1.13.0"></script>
   </head>
   <body>
     <main class="shell">
@@ -38,16 +38,13 @@
           <input id="gfxFile" type="file" accept=".gfx" />
         </div>
 
-        <div class="field library-status-field">
-          <p id="libraryStatus" class="library-status" aria-live="polite">Loading Library catalog from repo…</p>
-          <details class="library-override">
-            <summary>Optional: replace with a local Library folder</summary>
-            <label for="libraryFolder">Library folder (.sptx snippets)</label>
-            <input id="libraryFolder" type="file" webkitdirectory multiple />
-            <p class="field-hint">Only needed if you have newer snippets than the GitHub <code>Library/</code> folder. Rebuild <code>library-catalog.json</code> with <code>build_library_catalog.py</code> after updating.</p>
-            <button id="loadLibraryBtn" type="button" class="secondary">Replace library from folder</button>
-          </details>
-        </div>
+        <details class="library-override">
+          <summary>Optional: replace with a local Library folder</summary>
+          <label for="libraryFolder">Library folder (.sptx snippets)</label>
+          <input id="libraryFolder" type="file" webkitdirectory multiple />
+          <p class="field-hint">Only needed if you have newer snippets than the GitHub <code>Library/</code> folder. Rebuild <code>library-catalog.json</code> with <code>build_library_catalog.py</code> after updating.</p>
+          <button id="loadLibraryBtn" type="button" class="secondary">Replace library from folder</button>
+        </details>
 
         <div class="actions">
           <button id="loadBtn" type="button">Load template</button>
@@ -85,12 +82,11 @@
 
         <section id="blockSearchSection" class="block-search-section" aria-label="Block search">
           <h3>Search blocks &amp; tags</h3>
-          <p class="field-hint">Example: type <code>comp_low</code> to see where it is used and what related custom blocks do.</p>
+          <p class="field-hint">Example: type <code>comp_low</code> — select it to see ladder rungs (what feeds it and what it controls).</p>
           <div class="block-search-bar">
             <input type="search" id="blockSearchInput" placeholder="Search tag or block (e.g. comp_low, fan_supply, Input Valid)…" autocomplete="off" />
           </div>
           <div id="blockSearchResults" class="block-search-results" hidden></div>
-          <aside id="blockSearchDetail" class="block-search-detail" hidden></aside>
         </section>
 
         <div class="editor-toolbar">
@@ -118,5 +114,21 @@
         </div>
       </div>
     </section>
+
+    <div id="blockDetailOverlay" class="detail-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="detailOverlayTitle">
+      <div class="detail-overlay-backdrop" data-detail-close></div>
+      <div class="detail-overlay-panel">
+        <header class="detail-overlay-bar">
+          <button type="button" id="detailBackBtn" class="secondary" data-detail-close>← Back</button>
+          <strong id="detailOverlayTitle">Block detail</strong>
+          <button type="button" id="detailMinimizeBtn" class="secondary">Minimize</button>
+        </header>
+        <div id="blockSearchDetail" class="block-search-detail"></div>
+      </div>
+    </div>
+
+    <button type="button" id="detailRestoreBtn" class="detail-restore" hidden>
+      Reopen <span id="detailRestoreName">block detail</span>
+    </button>
   </body>
 </html>
