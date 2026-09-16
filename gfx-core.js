@@ -2071,8 +2071,8 @@ const GfxCore = (() => {
     };
   }
 
-  function collectFocusBlockIds(wiringGraph, { blockId = "", symbolName = "", extraBlockIds = [] } = {}) {
-    const focusIds = new Set([...extraBlockIds].filter(Boolean).map(String));
+  function collectFocusBlockIds(wiringGraph, { blockId = "", symbolName = "" } = {}) {
+    const focusIds = new Set();
     if (blockId) focusIds.add(String(blockId));
 
     const key = normalizeLibraryKey(symbolName);
@@ -2123,7 +2123,9 @@ const GfxCore = (() => {
 
   function buildFocusedLogicRungs(wiringGraph, options = {}) {
     const focusIds = collectFocusBlockIds(wiringGraph, options);
-    if (!focusIds.size || !wiringGraph?.sheetDiagrams?.length) {
+    // Context blocks decide which rungs are relevant, but only focus blocks are highlighted.
+    const contextIds = new Set([...(options.contextBlockIds || [])].filter(Boolean).map(String));
+    if ((!focusIds.size && !contextIds.size) || !wiringGraph?.sheetDiagrams?.length) {
       return {
         focusIds: [...focusIds],
         sheetCount: 0,
@@ -2138,7 +2140,11 @@ const GfxCore = (() => {
     for (const sheet of wiringGraph.sheetDiagrams) {
       const layout = buildSheetRungs(sheet);
       const matched = layout.rungs
-        .filter((rung) => rung.steps.some((step) => focusIds.has(String(step.blockId))))
+        .filter((rung) =>
+          rung.steps.some(
+            (step) => focusIds.has(String(step.blockId)) || contextIds.has(String(step.blockId)),
+          ),
+        )
         .map((rung, index) => {
           const steps = annotateLogicSteps(rung.steps, focusIds);
           const focusIndex = steps.findIndex((step) => step.focus);

@@ -1,4 +1,4 @@
-const APP_VERSION = "1.13.0";
+const APP_VERSION = "1.13.1";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
@@ -285,7 +285,7 @@ function renderBlockDetail(blockId, fallbackName = "", symbolUsages = null) {
     ? GfxCore.buildFocusedLogicRungs(appState.wiringGraph, {
         blockId: detail.blockId || blockId || "",
         symbolName: detail.name || fallbackName || "",
-        extraBlockIds: usages.map((usage) => usage.blockId).filter(Boolean),
+        contextBlockIds: usages.map((usage) => usage.blockId).filter(Boolean),
       })
     : null;
   const ladderHtml = renderLogicLadderHtml(logic);
