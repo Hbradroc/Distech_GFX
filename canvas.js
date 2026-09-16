@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "1.20.1";
+  const APP_VERSION = "1.20.2";
   const GRID = 12;
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 4;
@@ -1472,7 +1472,7 @@
 
   // Sized so the diagram renders at 1:1 inside the window rather than shrinking
   // the labels: 3 boxes + 2 gaps + padding must match .block-window-body width.
-  const MINI = { boxW: 128, boxH: 32, gapY: 10, colGap: 44, pad: 12, maxPeers: 5 };
+  const MINI = { boxW: 128, boxH: 32, gapY: 10, colGap: 44, pad: 12, head: 16, maxPeers: 5 };
 
   /**
    * Resolve a block anywhere in the project along with its immediate wiring,
@@ -1514,16 +1514,18 @@
   }
 
   /** Purpose-built layout — original sheet coordinates are far too sparse here. */
-  function miniDiagramSvg(view) {
-    const ins = view.incoming.slice(0, MINI.maxPeers);
-    const outs = view.outgoing.slice(0, MINI.maxPeers);
+  function miniDiagramSvg(view, expanded) {
+    const limit = expanded ? Infinity : MINI.maxPeers;
+    const ins = view.incoming.slice(0, limit);
+    const outs = view.outgoing.slice(0, limit);
     const rows = Math.max(ins.length, outs.length, 1);
-    const height = rows * (MINI.boxH + MINI.gapY) + MINI.pad * 2;
+    const head = MINI.head;
+    const height = rows * (MINI.boxH + MINI.gapY) + MINI.pad * 2 + head;
     const width = MINI.boxW * 3 + MINI.colGap * 2 + MINI.pad * 2;
 
     const colX = { in: MINI.pad, self: MINI.pad + MINI.boxW + MINI.colGap, out: MINI.pad + (MINI.boxW + MINI.colGap) * 2 };
-    const rowY = (index, count) => MINI.pad + ((rows - count) / 2 + index) * (MINI.boxH + MINI.gapY);
-    const selfY = MINI.pad + ((rows - 1) / 2) * (MINI.boxH + MINI.gapY);
+    const rowY = (index, count) => MINI.pad + head + ((rows - count) / 2 + index) * (MINI.boxH + MINI.gapY);
+    const selfY = MINI.pad + head + ((rows - 1) / 2) * (MINI.boxH + MINI.gapY);
 
     const box = (x, y, label, cls, id, port) => `
       <g class="mini-node ${cls}"${id ? ` data-mini-block="${escapeHtml(id)}" tabindex="0" role="button"` : ""}>
@@ -1550,15 +1552,28 @@
     });
     parts.push(box(colX.self, selfY, blockLabels(view.block).title, "self", "", ""));
 
-    const more = [];
-    if (view.incoming.length > ins.length) more.push(`${view.incoming.length - ins.length} more input${view.incoming.length - ins.length === 1 ? "" : "s"}`);
-    if (view.outgoing.length > outs.length) more.push(`${view.outgoing.length - outs.length} more output${view.outgoing.length - outs.length === 1 ? "" : "s"}`);
+    if (ins.length) parts.push(`<text class="mini-col" x="${colX.in + MINI.boxW / 2}" y="${MINI.pad + 9}" text-anchor="middle">FEEDS IN (${view.incoming.length})</text>`);
+    if (outs.length) parts.push(`<text class="mini-col" x="${colX.out + MINI.boxW / 2}" y="${MINI.pad + 9}" text-anchor="middle">DRIVES (${view.outgoing.length})</text>`);
+
+    const hiddenIn = view.incoming.length - ins.length;
+    const hiddenOut = view.outgoing.length - outs.length;
+    const capped = view.incoming.length > MINI.maxPeers || view.outgoing.length > MINI.maxPeers;
+
+    let control = "";
+    if (hiddenIn || hiddenOut) {
+      const bits = [];
+      if (hiddenIn) bits.push(`${hiddenIn} more input${hiddenIn === 1 ? "" : "s"}`);
+      if (hiddenOut) bits.push(`${hiddenOut} more output${hiddenOut === 1 ? "" : "s"}`);
+      control = `<button type="button" class="mini-toggle" data-win-expand>Show ${bits.join(" and ")}</button>`;
+    } else if (expanded && capped) {
+      control = `<button type="button" class="mini-toggle" data-win-collapse>Show fewer connections</button>`;
+    }
 
     return `
       <svg class="mini-diagram" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Immediate connections">
         ${parts.join("")}
       </svg>
-      ${more.length ? `<p class="mini-more">Not shown: ${more.join(" and ")}.</p>` : ""}`;
+      ${control}`;
   }
 
   let windowSeq = 0;
@@ -1602,7 +1617,7 @@
       </header>
       <div class="block-window-body">
         <p class="block-window-where">On sheet: ${escapeHtml(where)}</p>
-        ${miniDiagramSvg(view)}
+        <div class="mini-wrap">${miniDiagramSvg(view, false)}</div>
         ${info?.plain ? `<p class="block-window-plain">${escapeHtml(info.plain)}</p>` : ""}
         ${info?.summary && !info?.plain ? `<p class="block-window-plain">${escapeHtml(info.summary)}</p>` : ""}
       </div>
@@ -1618,6 +1633,8 @@
     el.querySelector("[data-win-min]").addEventListener("click", () => minimizeWindow(id));
     el.querySelector("[data-win-goto]").addEventListener("click", () => focusBlock(id));
     el.addEventListener("click", (event) => {
+      if (event.target.closest("[data-win-expand]")) return setDiagramExpanded(id, true);
+      if (event.target.closest("[data-win-collapse]")) return setDiagramExpanded(id, false);
       const node = event.target.closest("[data-mini-block]");
       if (node) openBlockWindow(node.dataset.miniBlock);
     });
@@ -1635,7 +1652,18 @@
     el.dataset.blockId = id;
     el.dataset.label = labels.title;
     document.getElementById("windowLayer").appendChild(el);
-    state.windows.set(id, { el, minimized: false });
+    state.windows.set(id, { el, view, minimized: false, expanded: false });
+  }
+
+  /** Swap the mini diagram between the top few connections and all of them. */
+  function setDiagramExpanded(id, expanded) {
+    const win = state.windows.get(id);
+    if (!win) return;
+    win.expanded = expanded;
+    win.el.querySelector(".mini-wrap").innerHTML = miniDiagramSvg(win.view, expanded);
+    // Expanding can push the window past the bottom of the screen.
+    const overflow = win.el.getBoundingClientRect().bottom - window.innerHeight + 12;
+    if (overflow > 0) win.el.style.top = `${Math.max(8, win.el.offsetTop - overflow)}px`;
   }
 
   function minimizeWindow(id) {

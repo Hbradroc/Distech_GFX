@@ -1476,7 +1476,7 @@ button.secondary {
 
 .block-window-body {
   padding: 10px 12px;
-  max-height: 52vh;
+  max-height: 62vh;
   overflow: auto;
 }
 
@@ -1539,10 +1539,28 @@ button.secondary {
   stroke-width: 1.4;
 }
 
-.mini-more {
+.mini-col {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  fill: var(--muted);
+}
+
+.mini-toggle {
   margin: 6px 0 0;
-  font-size: 11px;
-  color: var(--muted);
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--accent, #4f46e5);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mini-toggle:hover {
+  border-color: var(--accent, #4f46e5);
+  background: #eef2ff;
 }
 
 .block-window-foot {
