@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "1.19.1";
+  const APP_VERSION = "1.20.1";
   const GRID = 12;
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 4;
@@ -32,6 +32,7 @@
     trail: [], // breadcrumb from the drawing sheet down into nested composites
     projectIndex: null, // whole-project block/link index, rebuilt after any edit
     currentTrace: null,
+    windows: new Map(), // floating block windows, keyed by block id
     catalog: null,
     knowledge: null,
     placement: null,
@@ -966,7 +967,7 @@
         return `
           <div class="signal-row">
             <span class="signal-port">${escapeHtml(port || "—")}</span>
-            <button type="button" class="peer-link" data-peer="${escapeHtml(peerId)}">${escapeHtml(peerName)}</button>
+            <button type="button" class="peer-link" data-peer="${escapeHtml(peerId)}" title="Open in a window without leaving this view — shift-click to jump the canvas there instead">${escapeHtml(peerName)}</button>
           </div>`;
       })
       .join("");
@@ -1465,6 +1466,256 @@
         ? `<p class="trace-note">This signal branches widely. These are the distinct routes found in the first ${MAX_PATHS} explored — there may be more.</p>`
         : ""}`;
     return summary + trace.paths.map((path, i) => tracePathHtml(path, i, trace.paths.length, withButtons)).join("");
+  }
+
+  // ------------------------------------------------ floating block windows ---
+
+  // Sized so the diagram renders at 1:1 inside the window rather than shrinking
+  // the labels: 3 boxes + 2 gaps + padding must match .block-window-body width.
+  const MINI = { boxW: 128, boxH: 32, gapY: 10, colGap: 44, pad: 12, maxPeers: 5 };
+
+  /**
+   * Resolve a block anywhere in the project along with its immediate wiring,
+   * building the owning sheet's scene when the block is not on screen. This is
+   * what lets a peer window show a block that lives on another sheet.
+   */
+  function neighbourhood(blockId) {
+    const id = String(blockId);
+    let scene = state.scene;
+    if (!scene?.byId.has(id)) {
+      const ownerId = projectIndex().blocks.get(id)?.ownerId;
+      if (!ownerId) return null;
+      try {
+        scene = buildScene(ownerId);
+      } catch (_) {
+        return null;
+      }
+    }
+    const block = scene.byId.get(id);
+    if (!block) return null;
+
+    const connected = scene.linkIndex.byBlock.get(id) || { incoming: [], outgoing: [] };
+    const toPeer = (link, direction) => {
+      const peerId = direction === "in" ? link.fromId : link.toId;
+      const peer = scene.byId.get(peerId) || projectIndex().blocks.get(peerId);
+      return {
+        id: peerId,
+        label: peer ? blockLabels(peer).title : `Block ${peerId}`,
+        port: direction === "in" ? link.toPort : link.fromPort,
+      };
+    };
+
+    return {
+      block,
+      scene,
+      incoming: connected.incoming.map((link) => toPeer(link, "in")),
+      outgoing: connected.outgoing.map((link) => toPeer(link, "out")),
+    };
+  }
+
+  /** Purpose-built layout — original sheet coordinates are far too sparse here. */
+  function miniDiagramSvg(view) {
+    const ins = view.incoming.slice(0, MINI.maxPeers);
+    const outs = view.outgoing.slice(0, MINI.maxPeers);
+    const rows = Math.max(ins.length, outs.length, 1);
+    const height = rows * (MINI.boxH + MINI.gapY) + MINI.pad * 2;
+    const width = MINI.boxW * 3 + MINI.colGap * 2 + MINI.pad * 2;
+
+    const colX = { in: MINI.pad, self: MINI.pad + MINI.boxW + MINI.colGap, out: MINI.pad + (MINI.boxW + MINI.colGap) * 2 };
+    const rowY = (index, count) => MINI.pad + ((rows - count) / 2 + index) * (MINI.boxH + MINI.gapY);
+    const selfY = MINI.pad + ((rows - 1) / 2) * (MINI.boxH + MINI.gapY);
+
+    const box = (x, y, label, cls, id, port) => `
+      <g class="mini-node ${cls}"${id ? ` data-mini-block="${escapeHtml(id)}" tabindex="0" role="button"` : ""}>
+        <rect x="${x}" y="${y}" width="${MINI.boxW}" height="${MINI.boxH}" rx="5" />
+        <text x="${x + MINI.boxW / 2}" y="${y + (port ? 13 : MINI.boxH / 2 + 4)}" text-anchor="middle">${escapeHtml(truncate(label, MINI.boxW - 10, 11))}</text>
+        ${port ? `<text class="mini-port" x="${x + MINI.boxW / 2}" y="${y + 25}" text-anchor="middle">${escapeHtml(truncate(port, MINI.boxW - 10, 9))}</text>` : ""}
+      </g>`;
+
+    const wire = (x1, y1, x2, y2) => {
+      const mid = (x1 + x2) / 2;
+      return `<path class="mini-wire" d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}" />`;
+    };
+
+    const parts = [];
+    ins.forEach((peer, i) => {
+      const y = rowY(i, ins.length);
+      parts.push(wire(colX.in + MINI.boxW, y + MINI.boxH / 2, colX.self, selfY + MINI.boxH / 2));
+      parts.push(box(colX.in, y, peer.label, "upstream", peer.id, peer.port));
+    });
+    outs.forEach((peer, i) => {
+      const y = rowY(i, outs.length);
+      parts.push(wire(colX.self + MINI.boxW, selfY + MINI.boxH / 2, colX.out, y + MINI.boxH / 2));
+      parts.push(box(colX.out, y, peer.label, "downstream", peer.id, peer.port));
+    });
+    parts.push(box(colX.self, selfY, blockLabels(view.block).title, "self", "", ""));
+
+    const more = [];
+    if (view.incoming.length > ins.length) more.push(`${view.incoming.length - ins.length} more input${view.incoming.length - ins.length === 1 ? "" : "s"}`);
+    if (view.outgoing.length > outs.length) more.push(`${view.outgoing.length - outs.length} more output${view.outgoing.length - outs.length === 1 ? "" : "s"}`);
+
+    return `
+      <svg class="mini-diagram" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Immediate connections">
+        ${parts.join("")}
+      </svg>
+      ${more.length ? `<p class="mini-more">Not shown: ${more.join(" and ")}.</p>` : ""}`;
+  }
+
+  let windowSeq = 0;
+  let windowZ = 60;
+
+  function openBlockWindow(blockId) {
+    const id = String(blockId);
+    const existing = state.windows.get(id);
+    if (existing) {
+      restoreWindow(id);
+      existing.el.style.zIndex = String((windowZ += 1));
+      return;
+    }
+
+    const view = neighbourhood(id);
+    if (!view) {
+      toast("That block could not be found in this project.", true);
+      return;
+    }
+
+    const labels = blockLabels(view.block);
+    const info = knowledgeFor(view.block.tag);
+    const where = projectIndex().sheetNameFor(id) || "this sheet";
+
+    const el = document.createElement("section");
+    el.className = "block-window";
+    el.style.zIndex = String((windowZ += 1));
+    // Cascade so several windows stay individually reachable.
+    const offset = (windowSeq += 1) % 6;
+    el.style.left = `${90 + offset * 26}px`;
+    el.style.top = `${90 + offset * 22}px`;
+
+    el.innerHTML = `
+      <header class="block-window-bar">
+        <span class="block-window-title" title="${escapeHtml(labels.title)}">${escapeHtml(labels.title)}</span>
+        <span class="block-window-sub">${escapeHtml(labels.subtitle || humanizeTag(view.block.tag))}</span>
+        <span class="block-window-actions">
+          <button type="button" data-win-min title="Minimise to the bar at the bottom">–</button>
+          <button type="button" data-win-close title="Close">×</button>
+        </span>
+      </header>
+      <div class="block-window-body">
+        <p class="block-window-where">On sheet: ${escapeHtml(where)}</p>
+        ${miniDiagramSvg(view)}
+        ${info?.plain ? `<p class="block-window-plain">${escapeHtml(info.plain)}</p>` : ""}
+        ${info?.summary && !info?.plain ? `<p class="block-window-plain">${escapeHtml(info.summary)}</p>` : ""}
+      </div>
+      <footer class="block-window-foot">
+        <button type="button" class="primary" data-win-goto>Go to it on the sheet</button>
+        <span class="block-window-hint">Click a neighbour to open it too</span>
+      </footer>`;
+
+    el.addEventListener("pointerdown", () => {
+      el.style.zIndex = String((windowZ += 1));
+    });
+    el.querySelector("[data-win-close]").addEventListener("click", () => closeBlockWindow(id));
+    el.querySelector("[data-win-min]").addEventListener("click", () => minimizeWindow(id));
+    el.querySelector("[data-win-goto]").addEventListener("click", () => focusBlock(id));
+    el.addEventListener("click", (event) => {
+      const node = event.target.closest("[data-mini-block]");
+      if (node) openBlockWindow(node.dataset.miniBlock);
+    });
+    el.addEventListener("keydown", (event) => {
+      const node = event.target.closest?.("[data-mini-block]");
+      if (node && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        openBlockWindow(node.dataset.miniBlock);
+      }
+    });
+
+    makeWindowDraggable(el, el.querySelector(".block-window-bar"));
+    el.querySelector(".block-window-title").textContent = labels.title;
+
+    el.dataset.blockId = id;
+    el.dataset.label = labels.title;
+    document.getElementById("windowLayer").appendChild(el);
+    state.windows.set(id, { el, minimized: false });
+  }
+
+  function minimizeWindow(id) {
+    const win = state.windows.get(id);
+    if (!win || win.minimized) return;
+    win.minimized = true;
+    win.el.hidden = true;
+
+    const dock = document.getElementById("windowDock");
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "dock-chip";
+    chip.textContent = win.el.dataset.label || `Block ${id}`;
+    chip.title = `Restore ${chip.textContent}`;
+    chip.addEventListener("click", () => restoreWindow(id));
+    dock.appendChild(chip);
+    win.chip = chip;
+    dock.hidden = false;
+  }
+
+  function restoreWindow(id) {
+    const win = state.windows.get(id);
+    if (!win) return;
+    win.minimized = false;
+    win.el.hidden = false;
+    win.el.style.zIndex = String((windowZ += 1));
+    win.chip?.remove();
+    win.chip = null;
+    syncDock();
+  }
+
+  function closeBlockWindow(id) {
+    const win = state.windows.get(id);
+    if (!win) return;
+    win.chip?.remove();
+    win.el.remove();
+    state.windows.delete(id);
+    syncDock();
+  }
+
+  /** The visible window sitting on top, which is what Esc should dismiss. */
+  function topmostWindowId() {
+    let best = "";
+    let bestZ = -1;
+    for (const [id, win] of state.windows) {
+      if (win.minimized) continue;
+      const z = Number(win.el.style.zIndex) || 0;
+      if (z > bestZ) {
+        bestZ = z;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  function syncDock() {
+    const dock = document.getElementById("windowDock");
+    dock.hidden = !dock.children.length;
+  }
+
+  function makeWindowDraggable(el, handle) {
+    let drag = null;
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("button")) return;
+      drag = { dx: event.clientX - el.offsetLeft, dy: event.clientY - el.offsetTop };
+      handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      const maxX = window.innerWidth - 120;
+      const maxY = window.innerHeight - 60;
+      el.style.left = `${clamp(event.clientX - drag.dx, -40, maxX)}px`;
+      el.style.top = `${clamp(event.clientY - drag.dy, 0, maxY)}px`;
+    });
+    const stop = (event) => {
+      drag = null;
+      if (handle.hasPointerCapture?.(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    };
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
   }
 
   // ------------------------------------------------- does this block fit? ---
@@ -1972,6 +2223,7 @@ ${traceBodyHtml(trace, false)}
       state.fileName = name;
       state.projectName = archive.projectName || name.replace(/\.gfx$/i, "");
       state.session = window.GfxEdit.createSession(archive.mainXmlText);
+      for (const id of Array.from(state.windows.keys())) closeBlockWindow(id);
 
       // Drawing sheets are the useful targets; composite bodies are internals.
       const all = window.GfxEdit.listSheets(state.session);
@@ -2156,10 +2408,13 @@ ${traceBodyHtml(trace, false)}
       focusBlock(button.dataset.blockId);
     });
 
+    // Peer links open a window rather than navigating, so the sheet you are
+    // reading stays put. The window itself has a "Go to it" button.
     el.inspector.addEventListener("click", (event) => {
       const peer = event.target.closest("[data-peer]");
       if (!peer) return;
-      focusBlock(peer.dataset.peer);
+      if (event.shiftKey) focusBlock(peer.dataset.peer);
+      else openBlockWindow(peer.dataset.peer);
     });
 
     el.placementCancel.addEventListener("click", clearPlacement);
@@ -2172,6 +2427,7 @@ ${traceBodyHtml(trace, false)}
       if (event.key === "Escape") {
         if (state.placement) clearPlacement();
         else if (!el.traceOverlay.hidden) closeTrace();
+        else if (topmostWindowId()) closeBlockWindow(topmostWindowId());
         else if (!el.verifyOverlay.hidden) closeVerifyOverlay();
         else if (state.selectedId) selectBlock("");
         else if (state.trail.length > 1) goToTrail(state.trail.length - 2); // step out of a composite

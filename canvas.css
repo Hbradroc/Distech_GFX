@@ -1396,6 +1396,201 @@ button.secondary {
   background: var(--danger);
 }
 
+/* ---------------------------------------------- floating block windows --- */
+
+.window-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.block-window {
+  position: fixed;
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  pointer-events: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.26);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.block-window-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  background: #1e293b;
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.block-window-bar:active {
+  cursor: grabbing;
+}
+
+.block-window-title {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.block-window-sub {
+  font-size: 11px;
+  color: #cbd5f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.block-window-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.block-window-actions button {
+  width: 24px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.block-window-actions button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.block-window-body {
+  padding: 10px 12px;
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.block-window-where {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.block-window-plain {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.mini-diagram {
+  display: block;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.mini-node rect {
+  fill: #fff;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.mini-node text {
+  font-size: 11px;
+  fill: var(--ink);
+}
+
+.mini-node .mini-port {
+  font-size: 9px;
+  fill: var(--muted);
+}
+
+.mini-node.self rect {
+  fill: #eef2ff;
+  stroke: var(--accent, #4f46e5);
+  stroke-width: 1.6;
+}
+
+.mini-node[data-mini-block] {
+  cursor: pointer;
+}
+
+.mini-node[data-mini-block]:hover rect,
+.mini-node[data-mini-block]:focus rect {
+  stroke: var(--accent, #4f46e5);
+  stroke-width: 1.6;
+  outline: none;
+}
+
+.mini-wire {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 1.4;
+}
+
+.mini-more {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.block-window-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2, #f8fafc);
+}
+
+.block-window-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.window-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #1e293b;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dock-chip {
+  max-width: 220px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-chip:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 @media (max-width: 1180px) {
   .workspace {
     grid-template-columns: 250px minmax(0, 1fr) 270px;
