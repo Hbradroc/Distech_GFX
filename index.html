@@ -3,132 +3,174 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Distech GFX Parameter Editor</title>
+    <title>Distech GFX — Logic Canvas</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=1.13.1" />
+    <link rel="stylesheet" href="gfx-shared.css?v=1.19.0" />
+    <link rel="stylesheet" href="canvas.css?v=1.19.0" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script defer src="gfx-core.js?v=1.13.1"></script>
-    <script defer src="app.js?v=1.13.1"></script>
+    <script defer src="gfx-shared.js?v=1.19.0"></script>
+    <script defer src="gfx-core.js?v=1.19.0"></script>
+    <script defer src="gfx-edit.js?v=1.19.0"></script>
+    <script defer src="canvas.js?v=1.19.0"></script>
   </head>
   <body>
-    <main class="shell">
-      <section class="card">
-        <div class="card-top">
-          <div class="card-top-actions">
-            <a class="email-link" href="mailto:hbradroc@uwo.ca" aria-label="Email hbradroc@uwo.ca">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.2-8 5.2-8-5.2V6l8 5 8-5v2.2Z" />
-              </svg>
-              <span>hbradroc@uwo.ca</span>
-            </a>
-          </div>
-        </div>
+    <header class="topbar">
+      <div class="topbar-title">
+        <span data-gfx-nav></span>
+        <span id="projectName" class="project-name">No project loaded</span>
+      </div>
 
-        <h1>Distech GFX Editor</h1>
-        <p class="sub">
-          Upload an EC-gfxProgram <code>.gfx</code> template. Job setpoints are shown first;
-          enable <strong>Other variables</strong> for logic constants, BACnet metadata, and com sensor registers.
-          Click <strong>Generate .gfx</strong> when done.
-        </p>
-
-        <div class="field">
-          <label for="gfxFile">Template file (.gfx)</label>
+      <div class="topbar-controls">
+        <label class="file-button">
           <input id="gfxFile" type="file" accept=".gfx" />
+          <span>Open .gfx</span>
+        </label>
+
+        <label class="control-group">
+          <span>Sheet</span>
+          <select id="sheetSelect" disabled></select>
+        </label>
+
+        <div class="zoom-group" role="group" aria-label="Zoom">
+          <button type="button" id="zoomOutBtn" title="Zoom out">−</button>
+          <span id="zoomLabel">100%</span>
+          <button type="button" id="zoomInBtn" title="Zoom in">+</button>
+          <button type="button" id="zoomFitBtn" title="Fit sheet to window">Fit</button>
         </div>
 
-        <details class="library-override">
-          <summary>Optional: replace with a local Library folder</summary>
-          <label for="libraryFolder">Library folder (.sptx snippets)</label>
-          <input id="libraryFolder" type="file" webkitdirectory multiple />
-          <p class="field-hint">Only needed if you have newer snippets than the GitHub <code>Library/</code> folder. Rebuild <code>library-catalog.json</code> with <code>build_library_catalog.py</code> after updating.</p>
-          <button id="loadLibraryBtn" type="button" class="secondary">Replace library from folder</button>
-        </details>
+        <span id="dirtyBadge" class="dirty-badge" hidden>Unsaved changes</span>
+        <button type="button" id="exportBtn" class="primary" disabled>Export .gfx</button>
+      </div>
+    </header>
 
-        <div class="actions">
-          <button id="loadBtn" type="button">Load template</button>
-          <button id="openLibraryBtn" type="button" class="secondary" disabled>Open library match</button>
-          <button id="generateBtn" type="button" disabled>Generate .gfx</button>
-          <button id="exportCsvBtn" type="button" class="secondary" disabled>Export CSV</button>
+    <div class="workspace">
+      <!-- ---------------------------------------------------------------- -->
+      <aside class="panel panel-left" aria-label="Library and search">
+        <div class="panel-tabs" role="tablist">
+          <button type="button" class="panel-tab active" data-left-tab="library" role="tab" aria-selected="true">Library</button>
+          <button type="button" class="panel-tab" data-left-tab="sheet" role="tab" aria-selected="false">On this sheet</button>
+          <button type="button" class="panel-tab" data-left-tab="signals" role="tab" aria-selected="false">Signals</button>
         </div>
 
-        <p id="readyHint" class="ready-hint" hidden>
-          Template loaded — edit parameters below, then click <strong>Generate .gfx</strong>.
-        </p>
-
-        <pre id="log" class="log" aria-live="polite"></pre>
-      </section>
-      <p class="footer-note">Systemair 467 · <span id="appVersion"></span></p>
-    </main>
-
-    <section id="parameterSection" class="parameter-section" hidden>
-      <aside id="wiringLaunch" class="wiring-launch-corner" hidden aria-label="Logic wiring viewer">
-        <h3>Logic cross-reference</h3>
-        <p id="wiringLaunchText">See run order (first→second→third), where tags are used, and sheet wiring.</p>
-        <button type="button" id="openWiringBtn" class="secondary" disabled>Open wiring viewer</button>
-        <button type="button" id="focusBlockSearchBtn" class="secondary" disabled>Search blocks</button>
-      </aside>
-      <div class="parameter-card">
-        <header class="parameter-header">
-          <div>
-            <h2 id="parameterTitle">Parameters</h2>
-            <p id="parameterSubtitle" class="parameter-subtitle"></p>
-          </div>
-          <div class="parameter-header-actions">
-            <button type="button" id="generateBtnInline" class="generate-inline">Generate .gfx</button>
-          </div>
-        </header>
-
-        <section id="blockSearchSection" class="block-search-section" aria-label="Block search">
-          <h3>Search blocks &amp; tags</h3>
-          <p class="field-hint">Example: type <code>comp_low</code> — select it to see ladder rungs (what feeds it and what it controls).</p>
-          <div class="block-search-bar">
-            <input type="search" id="blockSearchInput" placeholder="Search tag or block (e.g. comp_low, fan_supply, Input Valid)…" autocomplete="off" />
-          </div>
-          <div id="blockSearchResults" class="block-search-results" hidden></div>
+        <section id="leftLibrary" class="panel-body" role="tabpanel">
+          <p class="panel-hint">
+            Search a function block by name or by what it does, then place it on the sheet.
+          </p>
+          <input type="search" id="librarySearch" class="search-input" placeholder="Search: economizer, PID, delay, damper…" autocomplete="off" />
+          <div id="libraryResults" class="result-list" aria-live="polite"></div>
         </section>
 
-        <div class="editor-toolbar">
-          <input type="search" id="paramSearch" placeholder="Search parameter name…" autocomplete="off" />
-          <select id="categoryFilter" aria-label="Filter by section or category">
-            <option value="">All sections</option>
-          </select>
-          <label class="filter-toggle">
-            <input type="checkbox" id="showOtherVariables" />
-            Other variables
-          </label>
-          <label class="filter-toggle">
-            <input type="checkbox" id="changedOnly" />
-            Changed only
-          </label>
+        <section id="leftSheet" class="panel-body" role="tabpanel" hidden>
+          <p class="panel-hint">Every block placed on the current sheet.</p>
+          <input type="search" id="sheetSearch" class="search-input" placeholder="Filter blocks on this sheet…" autocomplete="off" />
+          <div id="sheetBlockList" class="result-list"></div>
+        </section>
+
+        <section id="leftSignals" class="panel-body" role="tabpanel" hidden>
+          <p class="panel-hint">
+            Every named signal in the project. Pick one to trace where it is created and
+            everywhere it is used.
+          </p>
+          <input type="search" id="signalSearch" class="search-input" placeholder="Search a signal, e.g. damper_max…" autocomplete="off" />
+          <div id="signalList" class="result-list"></div>
+        </section>
+      </aside>
+
+      <!-- ---------------------------------------------------------------- -->
+      <main class="canvas-area">
+        <nav id="breadcrumbBar" class="breadcrumb-bar" aria-label="Sheet location" hidden></nav>
+
+        <div id="placementBanner" class="placement-banner" hidden>
+          <span id="placementText">Click the sheet to place the block.</span>
+          <button type="button" id="placementCancel" class="link-button">Cancel</button>
         </div>
 
-        <p class="editor-meta" id="editorMeta"></p>
-
-        <div class="parameter-body">
-          <div class="editor-list" id="editorList"></div>
-          <aside class="editor-help" id="editorHelp" aria-live="polite">
-            <p class="editor-help-placeholder">Click a parameter or <strong>Info</strong> for EC-gfxProgram notes.</p>
-          </aside>
+        <div id="canvasHost" class="canvas-host">
+          <div id="emptyState" class="empty-state">
+            <h2>Open a .gfx project to begin</h2>
+            <p>
+              The canvas reads the real block coordinates from <code>Main.xml</code>, so the sheet
+              looks the way it does in EC-gfxProgram. Click any block to see what it controls.
+            </p>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <div id="blockDetailOverlay" class="detail-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="detailOverlayTitle">
-      <div class="detail-overlay-backdrop" data-detail-close></div>
-      <div class="detail-overlay-panel">
-        <header class="detail-overlay-bar">
-          <button type="button" id="detailBackBtn" class="secondary" data-detail-close>← Back</button>
-          <strong id="detailOverlayTitle">Block detail</strong>
-          <button type="button" id="detailMinimizeBtn" class="secondary">Minimize</button>
+        <div class="canvas-legend" id="canvasLegend" hidden>
+          <span><i class="sw sw-io"></i>Hardware I/O</span>
+          <span><i class="sw sw-bacnet"></i>BACnet</span>
+          <span><i class="sw sw-reference"></i>Reference tag</span>
+          <span><i class="sw sw-control"></i>PID / control</span>
+          <span><i class="sw sw-logic"></i>Logic</span>
+          <span><i class="sw sw-composite"></i>Custom block</span>
+          <span><i class="sw sw-constant"></i>Constant</span>
+          <span class="legend-sep"></span>
+          <span class="legend-tip">Drag to move · Double-click a custom block to open it · Ctrl+wheel to zoom</span>
+        </div>
+      </main>
+
+      <!-- ---------------------------------------------------------------- -->
+      <aside class="panel panel-right" aria-label="Block inspector">
+        <div id="inspectorActions" class="inspector-actionbar" hidden></div>
+        <div id="inspector" class="panel-body">
+          <p class="panel-placeholder">
+            Select a block on the sheet to see what it controls, how it works, and what you can change.
+          </p>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Verify-values modal shown after an insert ------------------------- -->
+    <div id="verifyOverlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="verifyTitle">
+      <div class="overlay-backdrop" data-verify-dismiss></div>
+      <div class="overlay-panel">
+        <header class="overlay-header">
+          <div>
+            <h2 id="verifyTitle">Does this block fit, and are its values right?</h2>
+            <p id="verifySubtitle" class="overlay-subtitle"></p>
+          </div>
         </header>
-        <div id="blockSearchDetail" class="block-search-detail"></div>
+        <div class="overlay-scroll">
+          <div id="verifyFit" hidden></div>
+          <p class="verify-intro">
+            These values came from the library snippet. Reference tags in particular must match names
+            that already exist in this project, otherwise the block reads nothing.
+          </p>
+          <div id="verifyRows" class="verify-rows"></div>
+        </div>
+        <footer class="overlay-footer">
+          <button type="button" id="verifyUndo" class="secondary">Remove the block</button>
+          <div class="overlay-footer-right">
+            <button type="button" id="verifyLater" class="secondary">Review later</button>
+            <button type="button" id="verifyApply" class="primary">Apply values</button>
+          </div>
+        </footer>
       </div>
     </div>
 
-    <button type="button" id="detailRestoreBtn" class="detail-restore" hidden>
-      Reopen <span id="detailRestoreName">block detail</span>
-    </button>
+    <!-- Signal trace ------------------------------------------------------ -->
+    <div id="traceOverlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="traceTitle">
+      <div class="overlay-backdrop" data-trace-dismiss></div>
+      <div class="overlay-panel overlay-panel-wide">
+        <header class="overlay-header">
+          <div>
+            <h2 id="traceTitle">Signal trace</h2>
+            <p id="traceSubtitle" class="overlay-subtitle"></p>
+          </div>
+        </header>
+        <div class="overlay-scroll">
+          <div id="traceBody"></div>
+        </div>
+        <footer class="overlay-footer">
+          <button type="button" id="tracePopOut" class="secondary">Open in a new window</button>
+          <div class="overlay-footer-right">
+            <button type="button" id="traceClose" class="primary">Close</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden aria-live="polite"></div>
   </body>
 </html>

@@ -7,7 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="gfx-shared.css?v=1.19.0" />
     <link rel="stylesheet" href="library-view.css?v=1.11.0" />
+    <script defer src="gfx-shared.js?v=1.19.0"></script>
     <script defer src="library-view.js?v=1.11.0"></script>
   </head>
   <body>
@@ -17,6 +19,7 @@
         <p id="libSubtitle" class="lib-subtitle">Which project blocks come from your Library .sptx snippets</p>
       </div>
       <div class="lib-toolbar-actions">
+            <span data-gfx-nav></span>
         <button type="button" id="printBtn" class="primary">Print / Save PDF</button>
         <button type="button" id="closeBtn" class="secondary">Close</button>
       </div>
@@ -42,5 +45,6 @@
       <section id="detailPanel" class="lib-detail" hidden aria-label="Selected library details"></section>
       <p id="libEmpty" class="lib-empty" hidden>No library matches for this project yet.</p>
     </main>
+    <script>document.addEventListener("DOMContentLoaded", function () { if (window.GfxShared) window.GfxShared.renderNav("library"); });</script>
   </body>
 </html>

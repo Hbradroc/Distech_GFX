@@ -1,0 +1,2270 @@
+{
+  "version": "2.0",
+  "note": "Beginner-facing explanations for EC-gfxProgram block types. Behavioural facts — port counts, Null handling, truth tables and clamping rules — are taken from the EC-gfxProgram Help (GraphicalProgrammingInterfaceToolHelpFile.chm, Block Objects section); each enriched entry names its source topic in docTopic.",
+  "categories": {
+    "logic": {
+      "label": "Logic",
+      "summary": "Boolean blocks that combine on/off conditions into a single true or false result."
+    },
+    "math": {
+      "label": "Math",
+      "summary": "Blocks that calculate, scale, or reshape analog values such as temperatures, pressures, and percentages."
+    },
+    "compare": {
+      "label": "Compare",
+      "summary": "Blocks that test an analog value against a setpoint or another value and produce an on/off result."
+    },
+    "signal": {
+      "label": "Signal routing",
+      "summary": "Blocks that choose, steer, split, or override which value continues through the sequence."
+    },
+    "timing": {
+      "label": "Timing and scheduling",
+      "summary": "Blocks that delay, time, count, or schedule when something is allowed to start and stop."
+    },
+    "control": {
+      "label": "Control loops",
+      "summary": "Closed-loop and staging blocks that drive an output toward a setpoint or sequence equipment."
+    },
+    "io": {
+      "label": "Hardware I/O",
+      "summary": "Blocks tied to physical terminals on the controller and to sensors on the field bus."
+    },
+    "bacnet": {
+      "label": "BACnet objects",
+      "summary": "Software points exposed to the network so operators and other controllers can read or write them."
+    },
+    "reference": {
+      "label": "Cross-sheet references",
+      "summary": "Tag blocks that carry a value between logic sheets without drawing a wire."
+    },
+    "constant": {
+      "label": "Constants and setpoints",
+      "summary": "Fixed values wired into the logic, from hard-coded numbers to adjustable setpoints."
+    },
+    "composite": {
+      "label": "Composite modules",
+      "summary": "Containers that hold a complete sub-sequence behind a single block on the sheet."
+    },
+    "alarm": {
+      "label": "Alarms",
+      "summary": "Blocks that detect an abnormal condition and report it to the operator or network."
+    }
+  },
+  "blocks": {
+    "And": {
+      "title": "And",
+      "category": "logic",
+      "summary": "Output is on only when every input condition is on at the same time.",
+      "how": "Each input port carries an on/off condition. The block evaluates all connected inputs every scan and turns its output on only if none of them are off. As soon as any single input drops out, the output goes off immediately with no delay. Unconnected ports normally take their configured default or override value, so an unused port left at off will hold the output off permanently.",
+      "controls": "Commonly used as the final permissive for a piece of equipment, for example allowing the supply fan to run only when the unit is occupied, the freeze stat is clear, and no fire alarm is present.",
+      "inputs": "Two or more on/off inputs, typically fed by compare blocks, schedules, safety contacts, or other logic blocks.",
+      "outputs": "A single on/off output that is on only while all inputs are on.",
+      "tuning": [
+        "Number of input ports used on the block",
+        "Default or override value on any input port that is left unwired"
+      ],
+      "watchOut": "An unwired input sitting at off will hold the whole permissive off, which looks like a failed sensor even though nothing is wrong in the field.",
+      "keywords": [
+        "and",
+        "all",
+        "permissive",
+        "interlock",
+        "safety"
+      ],
+      "docTopic": "Block Objects › Logic › And",
+      "plain": "Every condition must be true at once. Think of it as a row of switches wired in series — one open switch breaks the circuit.",
+      "steps": [
+        "Every scan, read each connected input as On (1) or Off (0).",
+        "If any input is Off, output Off immediately — no delay, no memory.",
+        "If every input is On, output On.",
+        "If no input is Off but some are Null, output Null rather than guessing."
+      ],
+      "table": {
+        "caption": "How And handles Null (from the help file)",
+        "headers": [
+          "Inputs",
+          "Output"
+        ],
+        "rows": [
+          [
+            "Any input is 0",
+            "0 — one Off is enough to force the output Off"
+          ],
+          [
+            "All inputs are 1",
+            "1"
+          ],
+          [
+            "No input is 0, but one or more are Null",
+            "Null"
+          ]
+        ]
+      },
+      "example": "A fan permissive: Occupied = 1, Freezestat clear = 1, Fire alarm clear = 1 → output 1, fan allowed to run. Drop Freezestat to 0 and the output goes to 0 on the same scan.",
+      "nullRule": "And is not a plain zero-fill: an unwired port reads Null, so the result becomes Null rather than Off. A Null permissive downstream can look like a dead output.",
+      "ports": "Two inputs are shown by default. Up to ten can be added through the Configure Ports window."
+    },
+    "Or": {
+      "title": "Or",
+      "category": "logic",
+      "summary": "Output turns on when at least one of the input conditions is on.",
+      "how": "The block reads every connected on/off input each scan and turns the output on if any one of them is on. The output only returns to off when all inputs are off together. Adding more inputs makes the output easier to trigger, not harder. Unconnected ports use their configured default, so a port defaulted to on will latch the output on.",
+      "controls": "Commonly used to gather several call-for-service conditions into one command, for example starting the unit when there is a heating call, a cooling call, or a ventilation call.",
+      "inputs": "Two or more on/off inputs from compare blocks, occupancy logic, override switches, or alarm logic.",
+      "outputs": "A single on/off output that is on while any input is on.",
+      "tuning": [
+        "Number of input ports used on the block",
+        "Default or override value on any input port that is left unwired"
+      ],
+      "watchOut": "An Or block hides which condition actually caused the start, so troubleshooting a short-cycling unit means checking every input rather than the output.",
+      "keywords": [
+        "or",
+        "any",
+        "call",
+        "demand",
+        "combine"
+      ],
+      "docTopic": "Block Objects › Logic › Or",
+      "plain": "Any one condition is enough. Think of switches wired in parallel — close any one and current flows.",
+      "steps": [
+        "Every scan, read each connected input.",
+        "If any input is On, output On immediately.",
+        "If none are On but at least one is a real Off, output Off.",
+        "Only when every input is Null does the output become Null."
+      ],
+      "table": {
+        "caption": "How Or handles Null (from the help file)",
+        "headers": [
+          "Inputs",
+          "Output"
+        ],
+        "rows": [
+          [
+            "Any input is 1",
+            "1"
+          ],
+          [
+            "No input is 1, at least one is 0",
+            "0 — a Null alongside a 0 still gives 0"
+          ],
+          [
+            "Every input is Null",
+            "Null"
+          ]
+        ]
+      },
+      "example": "A call for heat: Zone 1 calling = 0, Zone 2 calling = 1 → output 1, boiler enabled. Both zones satisfied (0 and 0) → output 0.",
+      "nullRule": "Or tolerates Null better than And — a Null sitting next to a real 0 still produces 0.",
+      "ports": "Two inputs are shown by default. Up to ten can be added through the Configure Ports window."
+    },
+    "Not": {
+      "title": "Not",
+      "category": "logic",
+      "summary": "Inverts an on/off signal so that on becomes off and off becomes on.",
+      "how": "The block takes one on/off input and outputs the opposite state on every scan. There is no delay or memory involved, so the output follows the input immediately. It is most often used to turn a normally closed condition into a normally open one, or to convert a fault signal into a healthy signal that a permissive can use.",
+      "controls": "Commonly used to turn a fault or alarm signal into a run permissive, for example inverting a freeze trip so the fan is allowed to run while the trip is clear.",
+      "inputs": "One on/off input, typically from a safety contact, compare block, or alarm.",
+      "outputs": "A single on/off output carrying the opposite state of the input.",
+      "tuning": [
+        "There is nothing to tune on this block; change the source signal or the compare block feeding it instead"
+      ],
+      "watchOut": "Double inversions are easy to create when wiring around an existing sequence, and two Not blocks in series cancel each other out while looking like real logic.",
+      "keywords": [
+        "not",
+        "invert",
+        "inverse",
+        "opposite",
+        "negate"
+      ],
+      "docTopic": "Block Objects › Logic › Not",
+      "plain": "Flips the signal. On becomes Off, Off becomes On.",
+      "steps": [
+        "Read the single input.",
+        "Output the opposite value.",
+        "A Null in gives a Null out — it cannot invert 'unknown'."
+      ],
+      "table": {
+        "caption": "Not truth table (from the help file)",
+        "headers": [
+          "Input",
+          "Output"
+        ],
+        "rows": [
+          [
+            "0",
+            "1"
+          ],
+          [
+            "1",
+            "0"
+          ],
+          [
+            "Null",
+            "Null"
+          ]
+        ]
+      },
+      "example": "Used to build an interlock: Not(Fire alarm active) feeds an And block so the fan runs only while the alarm is clear.",
+      "nullRule": "Null inverts to Null, so a missing sensor does not accidentally read as 'safe'."
+    },
+    "Xor": {
+      "title": "Exclusive or",
+      "category": "logic",
+      "summary": "Output turns on when the inputs disagree, and stays off when they match.",
+      "how": "With two on/off inputs the output is on only when exactly one input is on. If both are on, or both are off, the output is off. This makes the block useful as a disagreement or mismatch detector rather than as a permissive. Where more than two inputs are supported, the output reflects whether an odd number of inputs are on.",
+      "controls": "Commonly used to detect a command-versus-status mismatch, for example flagging a problem when the fan is commanded on but the status contact reads off.",
+      "inputs": "Two on/off inputs, typically a command signal and the matching feedback or status signal.",
+      "outputs": "A single on/off output that is on while the inputs disagree.",
+      "tuning": [
+        "Which two signals are compared, since the block itself has no threshold",
+        "Any delay block downstream used to ignore momentary mismatches"
+      ],
+      "watchOut": "Without a delay downstream, normal start-up and shutdown transitions produce a brief mismatch and can create nuisance alarms every time the equipment cycles.",
+      "keywords": [
+        "xor",
+        "exclusive or",
+        "mismatch",
+        "disagree",
+        "proof"
+      ],
+      "docTopic": "Block Objects › Logic › Xor",
+      "plain": "On when an odd number of inputs are on. With two inputs that means 'one or the other, but not both'.",
+      "steps": [
+        "Count how many connected inputs are On.",
+        "Odd count → output On. Even count, including zero → output Off.",
+        "Any Null input forces the output to 0, unless every input is Null."
+      ],
+      "table": {
+        "caption": "Xor truth table including Null (from the help file)",
+        "headers": [
+          "Input 1",
+          "Input 2",
+          "Output"
+        ],
+        "rows": [
+          [
+            "0",
+            "0",
+            "0"
+          ],
+          [
+            "1",
+            "0",
+            "1"
+          ],
+          [
+            "0",
+            "1",
+            "1"
+          ],
+          [
+            "1",
+            "1",
+            "0"
+          ],
+          [
+            "0 or 1",
+            "Null",
+            "0"
+          ],
+          [
+            "Null",
+            "0 or 1",
+            "0"
+          ],
+          [
+            "Null",
+            "Null",
+            "Null"
+          ]
+        ]
+      },
+      "example": "Detecting disagreement: if a command says 'occupied' and the feedback says 'unoccupied', Xor goes On and can raise a mismatch alarm.",
+      "nullRule": "Unusual among the logic blocks — a single Null drives the output to 0 rather than Null.",
+      "ports": "Two inputs are shown by default. Up to ten can be added through the Configure Ports window."
+    },
+    "Equal": {
+      "title": "Equal",
+      "category": "compare",
+      "summary": "Turns its output on when two values match each other.",
+      "how": "The block compares the value on its first input against the value on its second input each scan and turns the output on while the two are the same. It is most reliable with whole numbers, state numbers, and enumerated values. Comparing two floating-point measurements for exact equality rarely holds true for long, so this block is normally used on mode or state numbers rather than on raw sensor readings.",
+      "controls": "Commonly used to decode an operating mode, for example enabling the heating sequence only while the unit state number equals the heating state.",
+      "inputs": "Two numeric inputs, typically a mode or state number and a constant that represents the state of interest.",
+      "outputs": "A single on/off output that is on while the two inputs match.",
+      "tuning": [
+        "The constant or setpoint on the reference input that defines the match value",
+        "Which state numbers the sequence treats as significant"
+      ],
+      "watchOut": "Used on an analog sensor, the output may never turn on because the measurement almost never lands exactly on the reference value; use a window of two compare blocks instead.",
+      "keywords": [
+        "equal",
+        "equals",
+        "match",
+        "state",
+        "mode"
+      ],
+      "docTopic": "Block Objects › Comparators › Equal",
+      "plain": "Asks a yes/no question about two numbers: is Input 1 equal to Input 2?",
+      "steps": [
+        "Read both numeric inputs every scan.",
+        "Output 1 when Input 1 is equal to Input 2.",
+        "Output 0 otherwise.",
+        "This is the usual bridge from analog measurements into on/off logic."
+      ],
+      "example": "Room temp 72.0 and setpoint 72.0 → output 1.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "NotEqual": {
+      "title": "Not equal",
+      "category": "compare",
+      "summary": "Turns its output on when two values differ from each other.",
+      "how": "The block compares its two numeric inputs each scan and turns the output on whenever they are not the same. It behaves as the inverse of the Equal block, and carries the same caution about floating-point measurements: two analog readings are almost always unequal, so the output tends to sit on permanently. It is best applied to mode numbers, state values, and enumerated positions.",
+      "controls": "Commonly used to detect that a unit has left its normal state, for example enabling a notification whenever the operating mode is anything other than occupied.",
+      "inputs": "Two numeric inputs, usually a live state or mode value and a reference constant.",
+      "outputs": "A single on/off output that is on while the inputs differ.",
+      "tuning": [
+        "The reference constant that defines the normal or expected value",
+        "Any downstream delay used to ignore brief state changes"
+      ],
+      "watchOut": "Because the output is on by default whenever values differ at all, a mis-set reference constant produces a condition that appears active from the moment the controller starts.",
+      "keywords": [
+        "not equal",
+        "different",
+        "mismatch",
+        "state",
+        "mode"
+      ],
+      "docTopic": "Block Objects › Comparators › Not equal",
+      "plain": "Asks a yes/no question about two numbers: is Input 1 not equal to Input 2?",
+      "steps": [
+        "Read both numeric inputs every scan.",
+        "Output 1 when Input 1 is not equal to Input 2.",
+        "Output 0 otherwise.",
+        "This is the usual bridge from analog measurements into on/off logic."
+      ],
+      "example": "Commanded mode 2 and actual mode 1 → output 1, flagging the mismatch.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "GreaterThan": {
+      "title": "Greater than",
+      "category": "compare",
+      "summary": "Turns its output on while the measured value rises above the reference value.",
+      "how": "The block compares the first input against the second each scan and turns the output on while the first is strictly higher. The output drops back off as soon as the measurement falls to or below the reference. Because there is no built-in deadband, a measurement hovering right at the reference will chatter, so a hysteresis or delay block is often added downstream.",
+      "controls": "Commonly used to start a stage on rising demand, for example enabling mechanical cooling once space temperature climbs above the cooling setpoint.",
+      "inputs": "A measured analog input and a reference input fed by a setpoint, constant, or calculated value.",
+      "outputs": "A single on/off output that is on while the measurement exceeds the reference.",
+      "tuning": [
+        "The setpoint or constant on the reference input",
+        "Any deadband or delay added downstream to stop chatter"
+      ],
+      "watchOut": "With no deadband, a sensor sitting at the setpoint will toggle the output every scan and short-cycle whatever it enables.",
+      "keywords": [
+        "greater than",
+        "above",
+        "high limit",
+        "setpoint",
+        "threshold"
+      ],
+      "docTopic": "Block Objects › Comparators › Greater than",
+      "plain": "Asks a yes/no question about two numbers: is Input 1 greater than Input 2?",
+      "steps": [
+        "Read both numeric inputs every scan.",
+        "Output 1 when Input 1 is greater than Input 2.",
+        "Output 0 otherwise.",
+        "This is the usual bridge from analog measurements into on/off logic."
+      ],
+      "example": "Outdoor 78 °F, changeover 75 °F → output 1, cooling allowed.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "GreaterOrEqual": {
+      "title": "Greater or equal",
+      "category": "compare",
+      "summary": "Turns its output on while the measured value is at or above the reference value.",
+      "how": "The block behaves like Greater than except that the output also turns on when the two inputs are exactly equal. That difference matters on integer and state values, where landing exactly on the reference is common. The output follows the comparison every scan with no memory, so it needs downstream deadband or delay when it drives equipment.",
+      "controls": "Commonly used where a stage should engage at the limit, for example allowing the next fan speed once the demand signal reaches its stage threshold.",
+      "inputs": "A measured analog or integer input and a reference input from a setpoint or constant.",
+      "outputs": "A single on/off output that is on while the measurement is at or above the reference.",
+      "tuning": [
+        "The threshold value on the reference input",
+        "Whether the sequence needs the at-the-limit case included, as against using Greater than"
+      ],
+      "watchOut": "Mixing this block with a Less than block on the same threshold leaves both outputs on when the value sits exactly on the reference, which can command two sequences at once.",
+      "keywords": [
+        "greater or equal",
+        "at or above",
+        "threshold",
+        "stage",
+        "limit"
+      ],
+      "docTopic": "Block Objects › Comparators › Greater or equal",
+      "plain": "Asks a yes/no question about two numbers: is Input 1 greater than or equal to Input 2?",
+      "steps": [
+        "Read both numeric inputs every scan.",
+        "Output 1 when Input 1 is greater than or equal to Input 2.",
+        "Output 0 otherwise.",
+        "This is the usual bridge from analog measurements into on/off logic."
+      ],
+      "example": "Stage count 2 with a minimum of 2 → output 1.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "LessThan": {
+      "title": "Less than",
+      "category": "compare",
+      "summary": "Turns its output on while the measured value falls below the reference value.",
+      "how": "The block compares the first input against the second each scan and turns the output on while the first is strictly lower. The output drops off as soon as the measurement rises to or above the reference. Like the other compare blocks it has no internal deadband, so it is normally paired with a hysteresis block or a start delay when it controls equipment.",
+      "controls": "Commonly used to lock out the compressor below a low ambient limit, or to start heating when discharge air temperature drops under its minimum.",
+      "inputs": "A measured analog input and a reference input fed by a setpoint, constant, or calculated limit.",
+      "outputs": "A single on/off output that is on while the measurement is below the reference.",
+      "tuning": [
+        "The low limit or setpoint on the reference input",
+        "Any deadband or delay applied downstream"
+      ],
+      "watchOut": "A failed sensor that reads zero or a very low value will satisfy this comparison and make a low-limit lockout appear genuine, so sensor fault checking belongs alongside it.",
+      "keywords": [
+        "less than",
+        "below",
+        "low limit",
+        "lockout",
+        "threshold"
+      ],
+      "docTopic": "Block Objects › Comparators › Less than",
+      "plain": "Asks a yes/no question about two numbers: is Input 1 less than Input 2?",
+      "steps": [
+        "Read both numeric inputs every scan.",
+        "Output 1 when Input 1 is less than Input 2.",
+        "Output 0 otherwise.",
+        "This is the usual bridge from analog measurements into on/off logic."
+      ],
+      "example": "Discharge 48 °F, low limit 50 °F → output 1, low-temp alarm.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "LessOrEqual": {
+      "title": "Less or equal",
+      "category": "compare",
+      "summary": "Turns its output on while the measured value is at or below the reference value.",
+      "how": "The block works like Less than but also turns the output on when the inputs are exactly equal. This is the usual choice when comparing integers, stage counts, or state numbers where an exact match on the boundary is expected. The comparison is re-evaluated every scan and the output has no memory of its previous state.",
+      "controls": "Commonly used to release a stage at its boundary, for example dropping a cooling stage once the calculated demand is at or below that stage's threshold.",
+      "inputs": "A measured analog or integer input and a reference input from a setpoint or constant.",
+      "outputs": "A single on/off output that is on while the measurement is at or below the reference.",
+      "tuning": [
+        "The boundary value on the reference input",
+        "Whether the sequence needs the at-the-limit case included, as against using Less than"
+      ],
+      "watchOut": "Using this alongside Greater or equal on the same threshold creates an overlap at the boundary value where both branches are active.",
+      "keywords": [
+        "less or equal",
+        "at or below",
+        "threshold",
+        "release",
+        "limit"
+      ],
+      "docTopic": "Block Objects › Comparators › Less or equal",
+      "plain": "Asks a yes/no question about two numbers: is Input 1 less than or equal to Input 2?",
+      "steps": [
+        "Read both numeric inputs every scan.",
+        "Output 1 when Input 1 is less than or equal to Input 2.",
+        "Output 0 otherwise.",
+        "This is the usual bridge from analog measurements into on/off logic."
+      ],
+      "example": "CO2 at 800 ppm with a limit of 800 → output 1.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "Add": {
+      "title": "Add",
+      "category": "math",
+      "summary": "Adds its numeric inputs together and outputs the total.",
+      "how": "The block sums all connected numeric inputs each scan and presents the result on its output. Inputs may be sensor readings, setpoints, constants, or calculated values, and they are added in engineering units exactly as they arrive. Unconnected ports contribute their configured default, which is normally zero so an unused port has no effect on the total.",
+      "controls": "Commonly used to build an adjusted setpoint, for example adding a reset offset to a base discharge air setpoint before it reaches the control loop.",
+      "inputs": "Two or more numeric inputs from sensors, setpoints, constants, or upstream math blocks.",
+      "outputs": "A single numeric output equal to the sum of the inputs.",
+      "tuning": [
+        "The constant or offset value wired into one of the inputs",
+        "Number of input ports used on the block"
+      ],
+      "watchOut": "Adding values that are in different units, such as degrees and percent, produces a number that looks plausible on the sheet but drives the loop to the wrong target.",
+      "keywords": [
+        "add",
+        "sum",
+        "plus",
+        "offset",
+        "reset"
+      ]
+    },
+    "Subtract": {
+      "title": "Subtract",
+      "category": "math",
+      "summary": "Subtracts one numeric input from another and outputs the difference.",
+      "how": "The block takes the value on its first input and subtracts the value on its second, presenting the signed result on the output. The order of the inputs determines the sign, so swapping the wires flips a positive difference to a negative one. The output is recalculated every scan and can go negative, which downstream blocks must be able to handle.",
+      "controls": "Commonly used to calculate an error or differential, for example subtracting return air temperature from outside air temperature to drive an economizer decision.",
+      "inputs": "A first numeric input to subtract from, and a second numeric input to subtract.",
+      "outputs": "A single numeric output holding the signed difference.",
+      "tuning": [
+        "Which signal is wired to the first input, since it sets the sign of the result",
+        "Any constant used on the second input as a fixed offset"
+      ],
+      "watchOut": "Reversed inputs give a difference of the right magnitude but the wrong sign, and a comparison downstream will then enable the opposite mode.",
+      "keywords": [
+        "subtract",
+        "minus",
+        "difference",
+        "delta",
+        "error"
+      ]
+    },
+    "Multiply": {
+      "title": "Multiply",
+      "category": "math",
+      "summary": "Multiplies its numeric inputs together and outputs the product.",
+      "how": "The block multiplies all connected numeric inputs each scan and presents the product on its output. It is most often used with one live signal and one constant acting as a gain or a percentage factor. Unconnected ports take their configured default, and a port defaulted to zero will force the whole product to zero.",
+      "controls": "Commonly used to scale a demand signal into a command, for example multiplying a loop output by a maximum airflow to get a commanded flow setpoint.",
+      "inputs": "Two or more numeric inputs, typically a live value and a gain or scaling constant.",
+      "outputs": "A single numeric output equal to the product of the inputs.",
+      "tuning": [
+        "The gain or multiplier constant wired to one input",
+        "Whether the multiplier represents a fraction such as 0.1 or a whole percentage"
+      ],
+      "watchOut": "Confusing a percentage with a fraction, for example entering 10 where 0.1 was intended, changes the output by a factor of one hundred and drives the output to its limit.",
+      "keywords": [
+        "multiply",
+        "product",
+        "gain",
+        "scale",
+        "factor"
+      ]
+    },
+    "Divide": {
+      "title": "Divide",
+      "category": "math",
+      "summary": "Divides one numeric input by another and outputs the quotient.",
+      "how": "The block divides the value on its first input by the value on its second and presents the result on the output. Division by zero is an invalid operation, so the block must be protected upstream or the result treated with care downstream, since a zero divisor typically produces an unusable or invalid output. The calculation is repeated every scan.",
+      "controls": "Commonly used to normalise a measurement into a percentage, for example dividing measured airflow by design airflow to get a percent of full flow.",
+      "inputs": "A numeric input to be divided, and a divisor input from a constant, setpoint, or live value.",
+      "outputs": "A single numeric output holding the quotient.",
+      "tuning": [
+        "The divisor constant, often a design or full-scale value",
+        "Any limit block used downstream to bound the result"
+      ],
+      "watchOut": "A divisor that can reach zero, such as a live flow or speed signal, will break the calculation and can propagate an invalid value through the rest of the sequence.",
+      "keywords": [
+        "divide",
+        "division",
+        "quotient",
+        "ratio",
+        "percent"
+      ]
+    },
+    "Minimum": {
+      "title": "Minimum",
+      "category": "math",
+      "summary": "Outputs the lowest of its numeric input values.",
+      "how": "The block examines all connected numeric inputs each scan and passes through whichever one currently holds the lowest value. The chosen input can change from scan to scan as conditions move, so the output tracks whichever signal is lowest at that moment. Unconnected ports take their configured default, and a low default will win the comparison and hold the output down.",
+      "controls": "Commonly used to apply the most restrictive limit, for example taking the lower of a calculated cooling setpoint and a high-limit reset value.",
+      "inputs": "Two or more numeric inputs from sensors, setpoints, or calculated limits.",
+      "outputs": "A single numeric output equal to the lowest input value.",
+      "tuning": [
+        "The limiting constant or setpoint on one of the inputs",
+        "Number of input ports used on the block"
+      ],
+      "watchOut": "A failed sensor reading near zero becomes the winning input and silently clamps the sequence at an unrealistically low value.",
+      "keywords": [
+        "minimum",
+        "min",
+        "lowest",
+        "low select",
+        "limit"
+      ]
+    },
+    "Maximum": {
+      "title": "Maximum",
+      "category": "math",
+      "summary": "Outputs the highest of its numeric input values.",
+      "how": "The block examines all connected numeric inputs each scan and passes through whichever one currently holds the highest value. As with the Minimum block, the selected input changes as conditions move, so the output always reflects the highest live signal. Unconnected ports take their configured default, and a high default will dominate the result.",
+      "controls": "Commonly used to serve the worst-case zone, for example taking the highest zone cooling demand to set the air handler's discharge target.",
+      "inputs": "Two or more numeric inputs, often several zone demands or competing setpoints.",
+      "outputs": "A single numeric output equal to the highest input value.",
+      "tuning": [
+        "The minimum floor constant wired to one input to keep the output from collapsing",
+        "Number of input ports used on the block"
+      ],
+      "watchOut": "One over-reading sensor or one stuck zone demand drives the entire system, so a single bad input can keep the plant running harder than the building needs.",
+      "keywords": [
+        "maximum",
+        "max",
+        "highest",
+        "high select",
+        "worst case"
+      ]
+    },
+    "Average": {
+      "title": "Average",
+      "category": "math",
+      "summary": "Outputs the arithmetic mean of its numeric input values.",
+      "how": "The block adds the connected numeric inputs together and divides by how many are being counted, presenting the mean on its output. This smooths out differences between several similar measurements. Whether an unconnected port is counted in the divisor depends on the block configuration, so unused ports should be reviewed when the average reads lower than expected.",
+      "controls": "Commonly used to derive a representative space condition, for example averaging several zone temperature sensors into one building temperature used for reset.",
+      "inputs": "Two or more numeric inputs, typically multiple sensors measuring the same kind of condition.",
+      "outputs": "A single numeric output holding the mean of the counted inputs.",
+      "tuning": [
+        "Which sensors are included in the average",
+        "Number of input ports used and whether unused ports are counted"
+      ],
+      "watchOut": "Averaging hides a failed sensor rather than exposing it, because one extreme reading pulls the mean off without producing an obvious alarm.",
+      "keywords": [
+        "average",
+        "mean",
+        "smooth",
+        "zone average",
+        "representative"
+      ]
+    },
+    "Absolute": {
+      "title": "Absolute value",
+      "category": "math",
+      "summary": "Strips the sign from a numeric value so the output is never negative.",
+      "how": "The block takes one numeric input and outputs its magnitude, so a negative input becomes positive and a positive input passes through unchanged. It is most often placed after a Subtract block when the sequence cares about how far apart two values are but not which one is higher. The conversion happens every scan with no memory of direction.",
+      "controls": "Commonly used to measure deviation regardless of direction, for example flagging that space temperature is more than a set number of degrees away from setpoint, whether high or low.",
+      "inputs": "One numeric input, usually a signed difference or error value.",
+      "outputs": "A single numeric output holding the magnitude of the input.",
+      "tuning": [
+        "There is nothing to tune on this block; change the threshold on the compare block downstream instead"
+      ],
+      "watchOut": "Discarding the sign also discards the direction of the error, so a loop that needs to know whether it is overheating or overcooling must not read through this block.",
+      "keywords": [
+        "absolute",
+        "magnitude",
+        "unsigned",
+        "deviation",
+        "error"
+      ]
+    },
+    "Square": {
+      "title": "Square",
+      "category": "math",
+      "summary": "Multiplies a numeric value by itself and outputs the result.",
+      "how": "The block raises its single numeric input to the second power each scan. The output grows much faster than the input, so small changes at the high end of the range produce large swings. Because a negative input squares to a positive result, the sign of the input is lost. It is most often used in flow and pressure relationships where the physical behaviour is not linear.",
+      "controls": "Commonly used in airflow and pressure calculations, for example converting a velocity or position signal into a value that tracks pressure loss more closely.",
+      "inputs": "One numeric input, typically a velocity, flow, or normalised position signal.",
+      "outputs": "A single numeric output holding the input multiplied by itself.",
+      "tuning": [
+        "The scaling constant applied before or after the block to bring the result back into engineering units",
+        "Any limit block used downstream to bound the expanded range"
+      ],
+      "watchOut": "Squaring an unscaled engineering value produces a very large number that can saturate downstream blocks and outputs, so scaling around it matters.",
+      "keywords": [
+        "square",
+        "squared",
+        "power",
+        "flow",
+        "pressure"
+      ]
+    },
+    "SquareRoot": {
+      "title": "Square root",
+      "category": "math",
+      "summary": "Outputs the square root of a numeric value, compressing the upper range.",
+      "how": "The block takes the square root of its single numeric input each scan. The result changes quickly at the low end of the range and slowly at the high end, which matches the behaviour of differential pressure based flow measurement. A negative input has no real square root, so upstream limiting keeps the calculation valid.",
+      "controls": "Commonly used to convert a differential pressure signal into airflow or water flow, which is the standard relationship for pitot and orifice type flow elements.",
+      "inputs": "One numeric input holding a non-negative value such as a differential pressure reading.",
+      "outputs": "A single numeric output holding the square root of the input.",
+      "tuning": [
+        "The flow coefficient or scaling constant applied after the root",
+        "Any low-end cut-off used to ignore noise near zero pressure"
+      ],
+      "watchOut": "A negative or noisy near-zero input makes the calculation invalid or jumpy, which shows up as unstable flow readings at low airflow.",
+      "keywords": [
+        "square root",
+        "root",
+        "flow",
+        "differential pressure",
+        "velocity"
+      ]
+    },
+    "Modulo": {
+      "title": "Modulo",
+      "category": "math",
+      "summary": "Outputs the remainder left after dividing one value by another.",
+      "how": "The block divides the first numeric input by the second and outputs only what is left over. The result cycles repeatedly from zero up to one step below the divisor, which makes it useful for wrapping counters and building repeating patterns. A divisor of zero is invalid, so the second input should be a fixed non-zero constant in most designs.",
+      "controls": "Commonly used to rotate duty between equipment, for example wrapping a lead selection index so it cycles through the available pumps or compressors.",
+      "inputs": "A numeric input to be divided, and a divisor that sets the length of the repeating cycle.",
+      "outputs": "A single numeric output holding the remainder of the division.",
+      "tuning": [
+        "The divisor constant that sets how many steps the cycle contains",
+        "Whether the resulting index is counted from zero or from one downstream"
+      ],
+      "watchOut": "Off-by-one errors are common because the remainder starts at zero, so a three-unit rotation yields 0, 1, and 2 rather than 1, 2, and 3.",
+      "keywords": [
+        "modulo",
+        "remainder",
+        "mod",
+        "rotation",
+        "cycle"
+      ]
+    },
+    "Negate": {
+      "title": "Negate",
+      "category": "math",
+      "summary": "Flips the sign of a numeric value so positive becomes negative and the reverse.",
+      "how": "The block multiplies its single numeric input by minus one each scan. A positive input leaves as negative, a negative input leaves as positive, and zero stays at zero. It is commonly used to reverse the direction of an error signal or an offset so that a downstream loop or math chain acts the correct way round.",
+      "controls": "Commonly used to reverse a reset direction, for example turning a positive demand offset into a negative setpoint shift for a cooling sequence.",
+      "inputs": "One numeric input, usually an error, offset, or reset value.",
+      "outputs": "A single numeric output holding the input with its sign reversed.",
+      "tuning": [
+        "There is nothing to tune on this block; change the source value or the loop action downstream instead"
+      ],
+      "watchOut": "Negating a signal that already has the correct sign reverses control action, and the loop will then drive away from setpoint instead of toward it.",
+      "keywords": [
+        "negate",
+        "invert sign",
+        "reverse",
+        "minus",
+        "direction"
+      ]
+    },
+    "Round": {
+      "title": "Round",
+      "category": "math",
+      "summary": "Rounds a numeric value to the nearest whole number or configured precision.",
+      "how": "The block takes a value with decimal places and returns the closest value at the configured precision, moving up or down as appropriate. Values exactly halfway between follow the block's rounding convention. It is used where a downstream block expects a whole number, such as a stage count or a multi-state value, or where a displayed reading should not show excess decimal places.",
+      "controls": "Commonly used to convert a calculated demand into a whole number of stages, or to tidy a displayed temperature or humidity reading for the operator.",
+      "inputs": "One numeric input carrying a value with decimal places.",
+      "outputs": "A single numeric output rounded to the configured precision.",
+      "tuning": [
+        "The number of decimal places or precision the block rounds to",
+        "Whether the sequence needs rounding to nearest or truncation toward zero"
+      ],
+      "watchOut": "Rounding a demand signal before a staging block makes the stage boundary shift by half a step, which changes when equipment actually engages.",
+      "keywords": [
+        "round",
+        "rounding",
+        "nearest",
+        "whole number",
+        "precision"
+      ]
+    },
+    "Truncate": {
+      "title": "Truncate",
+      "category": "math",
+      "summary": "Drops the fractional part of a numeric value without rounding up.",
+      "how": "The block removes the decimal portion of its input and returns the whole number part, discarding whatever was after the decimal point. Unlike Round, a value of 2.9 becomes 2 rather than 3, so the result is always at or below the original magnitude. This makes it predictable for converting a continuous value into a step count where partial steps should not count.",
+      "controls": "Commonly used to convert a continuous demand into completed stages, so that a demand of 2.9 stages commands two stages rather than three.",
+      "inputs": "One numeric input carrying a value with decimal places.",
+      "outputs": "A single numeric output holding the whole number part of the input.",
+      "tuning": [
+        "The scaling applied upstream, since it determines where each step boundary lands",
+        "Whether the sequence should truncate or round to nearest"
+      ],
+      "watchOut": "Truncation always biases downward, so a sequence sized on truncated demand will consistently run one step short of what the calculation asked for.",
+      "keywords": [
+        "truncate",
+        "integer",
+        "whole number",
+        "floor",
+        "stage count"
+      ]
+    },
+    "Limit": {
+      "title": "Limit",
+      "category": "math",
+      "summary": "Clamps a numeric value so it cannot go below a low limit or above a high limit.",
+      "how": "The block passes its input straight through while the value sits between the configured low and high limits. Above the high limit the output holds at the high limit, and below the low limit it holds at the low limit. The clamping is immediate and has no memory, so the output resumes tracking as soon as the input returns inside the band. The limits may be fixed configuration values or wired from live inputs.",
+      "controls": "Commonly used to bound a commanded output, for example keeping a damper command between a minimum ventilation position and full open.",
+      "inputs": "A numeric input to be clamped, plus low and high limit values from configuration or live signals.",
+      "outputs": "A single numeric output holding the clamped value.",
+      "tuning": [
+        "The low limit, often a minimum ventilation or minimum speed value",
+        "The high limit, often a maximum capacity or maximum speed value"
+      ],
+      "watchOut": "An unconnected High or Low port does not mean 'no limit' — it falls back to the 8-bit controller maximum, which can clamp a value you expected to pass through. Wire both ports explicitly.",
+      "keywords": [
+        "limit",
+        "clamp",
+        "bound",
+        "minimum",
+        "maximum"
+      ],
+      "docTopic": "Block Objects › General › Limit",
+      "plain": "A clamp. Anything above the High value comes out as High, anything below Low comes out as Low.",
+      "steps": [
+        "Read Input, High and Low.",
+        "Input above High → output High.",
+        "Input below Low → output Low.",
+        "Otherwise pass the Input through untouched."
+      ],
+      "example": "A reset schedule calculates a 58 °F supply setpoint but the coil cannot go below 60. With Low = 60 and High = 75, the output is clamped to 60.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "Scale": {
+      "title": "Scale",
+      "category": "math",
+      "summary": "Converts a value from one range into the matching value in another range.",
+      "how": "The block maps its input range onto its output range in proportion, so the low end of the input corresponds to the low end of the output and the high end to the high end. Values in between land proportionally. Setting the output low higher than the output high reverses the action, which is a common way to create a reverse-acting signal. Behaviour outside the input range depends on whether the block is configured to clamp.",
+      "controls": "Commonly used to turn a raw signal into engineering units or a command, for example scaling a zero to ten volt input into zero to one hundred percent damper position.",
+      "inputs": "A numeric input to be converted, along with the configured input low and high range values.",
+      "outputs": "A single numeric output expressed in the configured output range.",
+      "tuning": [
+        "Input low and input high values that define the incoming range",
+        "Output low and output high values that define the engineering range",
+        "Reversing the output range to create reverse action"
+      ],
+      "watchOut": "A range that does not match the actual device, such as scaling a two to ten volt actuator as zero to ten volt, leaves the output offset across the whole travel.",
+      "keywords": [
+        "scale",
+        "scaling",
+        "range",
+        "engineering units",
+        "map"
+      ]
+    },
+    "Linear": {
+      "title": "Linear function",
+      "category": "math",
+      "summary": "Applies a straight-line relationship between an input value and an output value.",
+      "how": "The block defines a line using the configured endpoints or slope and offset, then returns the point on that line matching the current input. It behaves like a reset schedule: as the input moves from one end of its range to the other, the output moves smoothly between its two defined values. Reversing the endpoints gives a falling relationship rather than a rising one.",
+      "controls": "Commonly used to build a reset schedule, for example resetting discharge air setpoint down as outside air temperature rises.",
+      "inputs": "One numeric input such as outside air temperature, demand, or load, plus the configured endpoint values.",
+      "outputs": "A single numeric output holding the calculated point on the line.",
+      "tuning": [
+        "The two input endpoints that define where the reset starts and ends",
+        "The two output values that define the setpoint range",
+        "Reversing the endpoints for a falling relationship"
+      ],
+      "watchOut": "The output is not held between Y1 and Y2 — feed it into a Limit block. Also avoid X1 and X2 being close together: a denominator under 1 acts as a multiplier and can overflow the ±83,886 range.",
+      "keywords": [
+        "linear",
+        "reset",
+        "ramp",
+        "slope",
+        "interpolate"
+      ],
+      "docTopic": "Block Objects › General › Linear",
+      "plain": "Straight-line rescaling: it maps an input range onto an output range, the classic reset curve.",
+      "steps": [
+        "Define the line with two points: (X1, Y1) and (X2, Y2).",
+        "Take the Input as an X value.",
+        "Return the matching Y along that straight line.",
+        "Inputs beyond X1 or X2 keep following the line — the output is not clamped."
+      ],
+      "example": "Supply air reset: X1 = 0 °F outdoor → Y1 = 180 °F supply, X2 = 60 °F outdoor → Y2 = 120 °F supply. A 30 °F outdoor temperature gives 150 °F.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "Hysteresis": {
+      "title": "Hysteresis",
+      "category": "compare",
+      "summary": "Switches its output on and off at two different thresholds to prevent chatter.",
+      "how": "The block turns its output on when the input crosses the upper threshold and does not turn it off again until the input falls past the lower threshold. The gap between the two thresholds is the deadband, and inside that gap the output holds whatever state it already had. That memory is what keeps equipment from cycling rapidly when a measurement sits near its setpoint.",
+      "controls": "Commonly used to stage equipment cleanly, for example starting a cooling stage above the setpoint and holding it on until the temperature drops well below it.",
+      "inputs": "A numeric measurement input, plus upper and lower threshold values from configuration or live signals.",
+      "outputs": "A single on/off output that holds state inside the deadband.",
+      "tuning": [
+        "The upper threshold, or on point",
+        "The lower threshold, or off point, which sets the deadband width",
+        "Initial output state at controller start-up"
+      ],
+      "watchOut": "Keep SwitchOn and SwitchOff as fixed values, or derive them with Add and Subtract from a setpoint. Changing them live while the loop runs causes unpredictable switching.",
+      "keywords": [
+        "hysteresis",
+        "deadband",
+        "differential",
+        "cycling",
+        "short cycle"
+      ],
+      "docTopic": "Block Objects › General › Hysteresis",
+      "plain": "An on/off control with a deliberate gap between the turn-on and turn-off points, so equipment does not short cycle.",
+      "steps": [
+        "Compare the Input against the SwitchOn and SwitchOff values.",
+        "Cross the SwitchOn threshold → output On.",
+        "Cross the SwitchOff threshold → output Off.",
+        "Between the two, hold the previous output — this is the memory that stops short cycling."
+      ],
+      "table": {
+        "caption": "Direction depends on which threshold is larger (from the help file)",
+        "headers": [
+          "Setup",
+          "Behaviour"
+        ],
+        "rows": [
+          [
+            "SwitchOn below SwitchOff",
+            "On when Input falls to or below SwitchOn; Off when it rises to or above SwitchOff (heating)"
+          ],
+          [
+            "SwitchOn above SwitchOff",
+            "On when Input rises to or above SwitchOn; Off when it falls to or below SwitchOff (cooling)"
+          ],
+          [
+            "SwitchOn equals SwitchOff",
+            "Acts as a plain threshold with no deadband at all"
+          ]
+        ]
+      },
+      "example": "Baseboard heat with setpoint 70 °F: SwitchOn 69.5, SwitchOff 70.5. Room falls to 69.5 → heat On. It stays on until 70.5, then goes Off. Between 69.5 and 70.5 nothing changes.",
+      "nullRule": "If any input is Null, the output is Null — not zero. A Null usually means a sensor or network value is unavailable, and it travels downstream through the whole chain."
+    },
+    "IsNull": {
+      "title": "Is null",
+      "category": "logic",
+      "summary": "Turns its output on when the incoming value is missing or invalid rather than a real reading.",
+      "how": "The block checks whether its input currently carries a usable value. If the source is unreliable, unwritten, or otherwise has no valid value, the output turns on to signal that condition. When a real value is present the output stays off. This gives the sequence a way to detect a dead sensor or a lost network value without guessing from the magnitude of the reading.",
+      "controls": "Commonly used to fall back safely when a sensor or network value is lost, for example switching to a fixed default setpoint when a borrowed outside air temperature stops updating.",
+      "inputs": "One input of any type whose validity is being tested, often a sensor reading or a value from another controller.",
+      "outputs": "A single on/off output that is on while the input has no valid value.",
+      "tuning": [
+        "The fallback or default value used by the select block downstream when this output is on",
+        "Whether the condition also raises an operator alarm"
+      ],
+      "watchOut": "A value that is stale but still present is not the same as a missing value, so this block will not catch a sensor that has frozen at its last reading.",
+      "keywords": [
+        "null",
+        "invalid",
+        "unreliable",
+        "missing",
+        "fault"
+      ]
+    },
+    "Switch": {
+      "title": "Switch",
+      "category": "signal",
+      "summary": "Passes one of two input values through, chosen by an on/off control signal.",
+      "how": "The block has two value inputs and one on/off selector. When the selector is off, the first value passes to the output, and when it is on, the second value passes instead. The switch takes effect immediately on the same scan, so the output can step sharply between the two values. Whatever value is not selected has no influence on the output at all.",
+      "controls": "Commonly used to change setpoint by mode, for example passing the occupied setpoint while the schedule is occupied and the unoccupied setpoint when it is not.",
+      "inputs": "Two value inputs holding the alternatives, plus an on/off selector input from schedule, mode, or alarm logic.",
+      "outputs": "A single output carrying whichever input the selector chose.",
+      "tuning": [
+        "The two alternative values or setpoints wired to the value inputs",
+        "Which condition drives the selector input"
+      ],
+      "watchOut": "A large gap between the two values produces an abrupt jump when the selector changes, which can upset a downstream loop unless a ramp limits the change.",
+      "keywords": [
+        "switch",
+        "two position",
+        "changeover",
+        "occupied",
+        "unoccupied"
+      ],
+      "docTopic": "Block Objects › Logic › Switch",
+      "plain": "A two-way valve for values. The Select input decides which of two numbers gets through.",
+      "steps": [
+        "Read the Select input.",
+        "Select is 1 or greater → pass the On input to the output.",
+        "Select is less than 1 → pass the Off input.",
+        "Select is Null → pass the Off input. Null is treated as Off here, not as unknown."
+      ],
+      "table": {
+        "caption": "What Select does (from the help file)",
+        "headers": [
+          "Select value",
+          "Output takes"
+        ],
+        "rows": [
+          [
+            "1 or greater",
+            "the On input"
+          ],
+          [
+            "Less than 1",
+            "the Off input"
+          ],
+          [
+            "Null",
+            "the Off input"
+          ]
+        ]
+      },
+      "example": "Occupied setpoint 70 °F on the On input, unoccupied 62 °F on the Off input, schedule on Select. Occupied → 70 passes through; unoccupied or a failed schedule → 62.",
+      "nullRule": "A Null Select quietly selects the Off value, so design the Off branch to be the safe fallback."
+    },
+    "Select": {
+      "title": "Select",
+      "category": "signal",
+      "summary": "Picks one of several input values based on a numeric selector.",
+      "how": "The block has several value inputs and one numeric selector input. The selector number decides which input is copied to the output, and the other inputs are ignored. A selector value that falls outside the available range leaves the output at the block's defined fallback behaviour, so the selector should be bounded or validated upstream. The selection is re-evaluated every scan.",
+      "controls": "Commonly used to pick a setpoint by operating mode, for example choosing between occupied, standby, and unoccupied targets from a single mode number.",
+      "inputs": "Several value inputs holding the alternatives, plus a numeric selector input from mode logic or a multi-state value.",
+      "outputs": "A single output carrying the selected input value.",
+      "tuning": [
+        "The values or setpoints wired to each selectable input",
+        "Which mode or state number maps to each input position",
+        "The fallback value used when the selector is out of range"
+      ],
+      "watchOut": "Mode numbers that do not line up with the input positions send the sequence to the wrong setpoint, and the symptom looks like a setpoint problem rather than a selection problem.",
+      "keywords": [
+        "selector",
+        "mode",
+        "state",
+        "choose",
+        "setpoint"
+      ]
+    },
+    "Multiplexer": {
+      "title": "Multiplexer",
+      "category": "signal",
+      "summary": "Routes one of several inputs to a single output according to a selector value.",
+      "how": "The block gathers several input signals and passes only the one addressed by its selector to the output. It is the standard way to collapse many possible sources into one wire on the sheet. Inputs that are not selected are ignored entirely and do not carry forward any influence. Selector values outside the valid range follow the block's defined fallback behaviour.",
+      "controls": "Commonly used to select which sensor drives a control loop, for example choosing between discharge, return, and space temperature depending on the active control strategy.",
+      "inputs": "Multiple value inputs plus a numeric selector input that addresses which one to use.",
+      "outputs": "A single output carrying the addressed input.",
+      "tuning": [
+        "Which signal is wired to each input position",
+        "The selector source and how its values map to positions"
+      ],
+      "watchOut": "Because unselected inputs are dropped silently, a sensor fault on an unselected input stays hidden until the selector switches to it.",
+      "keywords": [
+        "multiplexer",
+        "mux",
+        "route",
+        "selector",
+        "many to one"
+      ],
+      "docTopic": "Block Objects › Logic › Multiplexer",
+      "plain": "A rotary selector switch: ten numbered inputs, and Select picks which one reaches the output.",
+      "steps": [
+        "Read Select as an integer from 0 to 9.",
+        "Pass the matching numbered input to the output.",
+        "Select higher than the highest configured input → output the highest configured input.",
+        "Select negative, Null, or pointing at an unconfigured input → output 0."
+      ],
+      "example": "HVAC mode on Select: 0 = Auto, 1 = Heat, 2 = Cool. With Select = 2, whatever is wired to Input2 becomes the output.",
+      "nullRule": "A Null Select gives 0, not Null — which can look like a valid command. Guard it if 0 means something real in your sequence.",
+      "ports": "Two inputs are shown by default; all ten are available through Configure Ports. Every input you intend to select must be wired."
+    },
+    "Demultiplexer": {
+      "title": "Demultiplexer",
+      "category": "signal",
+      "summary": "Sends a single input value to one of several outputs chosen by a selector.",
+      "how": "The block takes one input value and directs it to the output position addressed by its selector, which is the reverse of a multiplexer. The outputs that are not selected hold their defined inactive value rather than tracking the input. This makes it useful for steering a single command to whichever piece of equipment is currently designated.",
+      "controls": "Commonly used to direct a command to the active unit, for example sending a capacity signal to whichever chiller or pump is currently lead.",
+      "inputs": "One value input carrying the command, plus a numeric selector input that chooses the destination.",
+      "outputs": "Several outputs, of which only the addressed one carries the input value.",
+      "tuning": [
+        "Which equipment is wired to each output position",
+        "The inactive value held by the outputs that are not selected"
+      ],
+      "watchOut": "If the inactive outputs default to a non-zero value, idle equipment can receive a command it should not have, so the inactive state needs checking.",
+      "keywords": [
+        "demultiplexer",
+        "demux",
+        "route",
+        "distribute",
+        "one to many"
+      ],
+      "docTopic": "Block Objects › Logic › Selector",
+      "plain": "The reverse of a Multiplexer: one value in, and Select decides which of ten outputs it comes out of.",
+      "steps": [
+        "Read the Input value and the Select number (0 to 9).",
+        "Send the Input to the matching numbered output.",
+        "Every other output emits the Default port value.",
+        "With no Default wired, the unselected outputs emit Null."
+      ],
+      "example": "Routing a stage command to one of six compressors: Select = 3 sends the value out of Output3 while the rest sit at the Default, typically 0.",
+      "nullRule": "Unselected outputs default to Null unless you add and wire the Default port — wire it to 0 if downstream logic expects a number."
+    },
+    "AnalogSelect": {
+      "title": "Analog select",
+      "category": "signal",
+      "summary": "Chooses which analog value continues through the sequence based on a control input.",
+      "how": "The block holds several analog candidate values and passes one of them to its output according to its control or selector input. Only analog values are handled, so the output stays in engineering units such as degrees, percent, or pressure. The selection is evaluated each scan and the output steps directly to the newly selected value.",
+      "controls": "Commonly used to switch between analog setpoints or limits, for example selecting a different minimum damper position for occupied and unoccupied operation.",
+      "inputs": "Several analog value inputs from setpoints, constants, or sensors, plus a selector or control input.",
+      "outputs": "A single analog output carrying the selected value.",
+      "tuning": [
+        "The analog values or setpoints offered on each input",
+        "Which condition or mode number drives the selection"
+      ],
+      "watchOut": "Switching between widely separated analog values causes a step change in the command, and equipment such as a VFD may need a ramp downstream to absorb it.",
+      "keywords": [
+        "analog select",
+        "analog",
+        "setpoint select",
+        "changeover",
+        "routing"
+      ]
+    },
+    "BinarySelect": {
+      "title": "Binary select",
+      "category": "signal",
+      "summary": "Chooses which on/off signal continues through the sequence based on a control input.",
+      "how": "The block holds several on/off candidate signals and passes one of them to its output according to its control or selector input. Only the selected signal affects the output, and the others are ignored while unselected. Because everything involved is on/off, the output changes state cleanly on the same scan the selector moves.",
+      "controls": "Commonly used to choose which start command is in effect, for example selecting between a schedule-driven start and a manual operator start.",
+      "inputs": "Several on/off inputs from schedules, logic, or operator points, plus a selector or control input.",
+      "outputs": "A single on/off output carrying the selected signal.",
+      "tuning": [
+        "Which on/off source is wired to each input",
+        "Which condition drives the selection"
+      ],
+      "watchOut": "Because the unselected command is ignored rather than blocked, an operator writing to the unselected point sees no response and may assume the point is dead.",
+      "keywords": [
+        "binary select",
+        "digital select",
+        "on off",
+        "command select",
+        "routing"
+      ]
+    },
+    "Splitter": {
+      "title": "Splitter",
+      "category": "signal",
+      "summary": "Divides one incoming signal into several outputs that act over different parts of its range.",
+      "how": "The block takes a single input signal and drives multiple outputs from it, with each output configured to act over its own portion of the input range. As the input rises, the first output completes its travel before the next begins, giving sequenced action from one common demand signal. The split points are set by configuration and determine how much overlap, if any, exists between the outputs.",
+      "controls": "Commonly used for sequenced heating and cooling, for example driving a heating valve over the low end of a loop output and a cooling valve over the high end.",
+      "inputs": "One numeric input, usually the output of a control loop or a demand calculation.",
+      "outputs": "Several numeric outputs, each active over its configured portion of the input range.",
+      "tuning": [
+        "The range boundaries where each output starts and finishes",
+        "The size of any deadband between adjacent outputs",
+        "The output span assigned to each device"
+      ],
+      "watchOut": "Overlapping ranges with no deadband can command heating and cooling at the same time, which wastes energy and can be hard to spot from the sheet.",
+      "keywords": [
+        "splitter",
+        "sequence",
+        "split range",
+        "heating cooling",
+        "deadband"
+      ],
+      "docTopic": "Block Objects › Logic › Selector",
+      "plain": "The reverse of a Multiplexer: one value in, and Select decides which of ten outputs it comes out of.",
+      "steps": [
+        "Read the Input value and the Select number (0 to 9).",
+        "Send the Input to the matching numbered output.",
+        "Every other output emits the Default port value.",
+        "With no Default wired, the unselected outputs emit Null."
+      ],
+      "example": "Routing a stage command to one of six compressors: Select = 3 sends the value out of Output3 while the rest sit at the Default, typically 0.",
+      "nullRule": "Unselected outputs default to Null unless you add and wire the Default port — wire it to 0 if downstream logic expects a number."
+    },
+    "Monitor": {
+      "title": "Monitor",
+      "category": "signal",
+      "summary": "Watches a signal and makes its value visible without altering the sequence.",
+      "how": "The block observes the value on its input and presents it for display, logging, or downstream use while leaving the signal itself unchanged. It is a diagnostic aid rather than a control element, so removing it does not change how the sequence behaves. Depending on configuration it can also expose the observed value for viewing in the tool or on the network.",
+      "controls": "Commonly used during commissioning to watch an intermediate calculation, for example checking the demand value between a loop and the staging logic.",
+      "inputs": "One input of the type being observed, tapped from anywhere in the sequence.",
+      "outputs": "A pass-through or display output that reflects the observed value.",
+      "tuning": [
+        "Which point in the sequence the block is tapped from",
+        "Whether the observed value is exposed for display or logging"
+      ],
+      "watchOut": "Monitor blocks left scattered through a program add clutter and can be mistaken for active control elements during troubleshooting.",
+      "keywords": [
+        "monitor",
+        "watch",
+        "observe",
+        "diagnostic",
+        "display"
+      ]
+    },
+    "Override": {
+      "title": "Override",
+      "category": "signal",
+      "summary": "Replaces the normal signal with a forced value while the override is active.",
+      "how": "While the override condition is inactive the block passes the normal input straight through. When the override becomes active, the configured or wired override value takes its place and the normal signal is ignored. Releasing the override returns control to the normal path, which can produce a step change if conditions moved while the override was held.",
+      "controls": "Commonly used for forced operation, for example driving dampers to a fixed position during a smoke control or purge sequence regardless of normal control.",
+      "inputs": "A normal signal input, an override value input or configured value, and an on/off input that activates the override.",
+      "outputs": "A single output carrying either the normal signal or the override value.",
+      "tuning": [
+        "The override value the block forces",
+        "Which condition activates the override",
+        "Whether the override is expected to be temporary or latched"
+      ],
+      "watchOut": "An override left active after commissioning keeps the equipment at a fixed value and the normal sequence looks broken even though the logic is working as written.",
+      "keywords": [
+        "override",
+        "force",
+        "manual",
+        "hand",
+        "purge"
+      ]
+    },
+    "Priority": {
+      "title": "Priority",
+      "category": "signal",
+      "summary": "Passes through the highest-ranked active input, ignoring lower-ranked requests.",
+      "how": "The block ranks its inputs in order of importance and outputs whichever active input has the highest rank. Lower-ranked inputs only reach the output when every higher-ranked input is inactive. This mirrors the way BACnet priority arrays resolve competing commands, and it gives safety and life-safety logic a dependable way to outrank normal control.",
+      "controls": "Commonly used to arbitrate competing commands, for example letting a freeze protection command outrank normal temperature control at a heating valve.",
+      "inputs": "Several inputs ordered by rank, each with a means of indicating whether it is currently requesting control.",
+      "outputs": "A single output carrying the value from the highest-ranked active input.",
+      "tuning": [
+        "The rank order assigned to each input",
+        "Which condition marks an input as active or requesting",
+        "The fallback value used when no input is requesting"
+      ],
+      "watchOut": "Placing a permanently active input at a high rank blocks everything below it, so normal control never reaches the output.",
+      "keywords": [
+        "priority",
+        "arbitration",
+        "rank",
+        "command priority",
+        "safety"
+      ]
+    },
+    "StartDelay": {
+      "title": "Start delay",
+      "category": "timing",
+      "summary": "Delays turning the output on until the input has been on continuously for a set time.",
+      "how": "When the input turns on the block begins timing and holds its output off until the configured delay has elapsed. If the input drops out before the time is up, the timer resets and nothing happens. Turning off is not delayed: once the input goes off the output goes off immediately. This filters brief conditions while letting real ones through.",
+      "controls": "Commonly used to prove a condition before acting, for example waiting a set number of seconds of continuous low airflow before declaring a fan failure.",
+      "inputs": "One on/off input carrying the condition, plus a configured or wired delay time.",
+      "outputs": "A single on/off output that turns on only after the delay has fully elapsed.",
+      "tuning": [
+        "The delay time, often in seconds",
+        "Whether the timer restarts on every input drop-out"
+      ],
+      "watchOut": "A delay that is too long masks a genuine fault, while one that is too short lets normal start-up transients trip the sequence.",
+      "keywords": [
+        "start delay",
+        "on delay",
+        "debounce",
+        "proof",
+        "filter"
+      ]
+    },
+    "StopDelay": {
+      "title": "Stop delay",
+      "category": "timing",
+      "summary": "Keeps the output on for a set time after the input turns off.",
+      "how": "The output turns on as soon as the input turns on, with no delay. When the input turns off the block starts timing and holds the output on until the configured time has elapsed. If the input returns during the timing period the output stays on and the timer resets. This provides a minimum on time and prevents an output from dropping out on a momentary loss of its condition.",
+      "controls": "Commonly used for post-run operation, for example keeping the supply fan running for a period after the heating stage shuts off to clear residual heat.",
+      "inputs": "One on/off input carrying the condition, plus a configured or wired delay time.",
+      "outputs": "A single on/off output that turns off only after the delay has elapsed.",
+      "tuning": [
+        "The off delay time, often in seconds or minutes",
+        "Whether the delay should also enforce a minimum run time"
+      ],
+      "watchOut": "A long stop delay keeps equipment running after a shutdown command, which can look like a failed output or an ignored stop request.",
+      "keywords": [
+        "stop delay",
+        "off delay",
+        "post run",
+        "coast",
+        "minimum on"
+      ]
+    },
+    "StartStopDelay": {
+      "title": "Start and stop delay",
+      "category": "timing",
+      "summary": "Delays both turning on and turning off using separate configured times.",
+      "how": "The block combines an on delay and an off delay in one element. An input that turns on must stay on for the start delay before the output follows, and an input that turns off must stay off for the stop delay before the output releases. Each timer resets if the input reverses before its time expires. The two delays are configured independently, so filtering can be tighter in one direction than the other.",
+      "controls": "Commonly used to stabilise a staging decision, for example requiring a sustained demand before adding a compressor stage and a sustained drop before dropping it.",
+      "inputs": "One on/off input carrying the condition, plus separate start and stop delay times.",
+      "outputs": "A single on/off output that lags the input in both directions.",
+      "tuning": [
+        "The start delay time",
+        "The stop delay time",
+        "The balance between the two, which sets how steady the output is"
+      ],
+      "watchOut": "Two long delays together make the sequence feel unresponsive, and an operator testing a command may conclude the output has failed before the timer expires.",
+      "keywords": [
+        "start stop delay",
+        "on off delay",
+        "debounce",
+        "staging",
+        "stabilise"
+      ]
+    },
+    "Timer": {
+      "title": "Timer",
+      "category": "timing",
+      "summary": "Measures elapsed time while enabled and signals when the set time is reached.",
+      "how": "While its enable input is on, the block accumulates elapsed time and makes that running value available. When the accumulated time reaches the configured preset, the block indicates completion on its output. Turning the enable off normally stops and resets the timing, and a dedicated reset input clears the accumulated value where provided. The elapsed value can be used directly by downstream logic.",
+      "controls": "Commonly used to time a step in a start-up sequence, for example holding a damper at minimum position for a fixed period before enabling the heating loop.",
+      "inputs": "An enable input to run the timer, an optional reset input, and a configured preset time.",
+      "outputs": "A completion output that indicates the preset has been reached, and typically an elapsed time value.",
+      "tuning": [
+        "The preset time the block counts toward",
+        "The time units used, such as seconds or minutes",
+        "Whether the timer resets when disabled or holds its value"
+      ],
+      "watchOut": "If the enable input flickers, the timer may keep resetting and never reach its preset, leaving the sequence stuck at that step with no obvious alarm.",
+      "keywords": [
+        "timer",
+        "elapsed",
+        "preset",
+        "delay",
+        "sequence step"
+      ]
+    },
+    "OneShot": {
+      "title": "One shot",
+      "category": "timing",
+      "summary": "Produces a single fixed-length pulse when its input turns on.",
+      "how": "The block reacts to the rising edge of its input by turning the output on for the configured duration, then turning it off again regardless of whether the input is still on. Holding the input on does not extend the pulse. Depending on configuration, a new input edge during the pulse may either be ignored or restart the timing, which affects how the block responds to repeated triggers.",
+      "controls": "Commonly used to send a momentary command, for example issuing a short pulse to reset a VFD fault or to index a stepped device one position.",
+      "inputs": "One on/off trigger input, plus a configured pulse duration.",
+      "outputs": "A single on/off output that is on for the configured duration after each accepted trigger.",
+      "tuning": [
+        "The pulse duration",
+        "Whether a new trigger during the pulse restarts the timing"
+      ],
+      "watchOut": "A pulse shorter than the receiving device needs is ignored by the field equipment, so the command appears to have been sent while nothing happens.",
+      "keywords": [
+        "one shot",
+        "pulse",
+        "momentary",
+        "edge",
+        "trigger"
+      ]
+    },
+    "Pulse": {
+      "title": "Pulse",
+      "category": "timing",
+      "summary": "Generates a repeating on and off pattern while the block is enabled.",
+      "how": "While enabled, the block cycles its output on and off using the configured on and off times, producing a steady train of pulses. The ratio between the two times sets how much of each cycle the output is energised. Disabling the block stops the output in its inactive state. The pattern is generated internally and does not depend on the input changing state.",
+      "controls": "Commonly used to drive incremental or floating actuators, or to provide a periodic trigger for a rotation or sampling routine.",
+      "inputs": "An enable input, plus configured on time and off time values.",
+      "outputs": "A single on/off output that cycles while the block is enabled.",
+      "tuning": [
+        "The on time of each pulse",
+        "The off time between pulses",
+        "The resulting cycle period seen by the field device"
+      ],
+      "watchOut": "Pulsing faster than a relay or contactor can follow causes excessive wear and can leave the device in an unpredictable state.",
+      "keywords": [
+        "pulse",
+        "pulse train",
+        "cycle",
+        "floating actuator",
+        "incremental"
+      ]
+    },
+    "Runtime": {
+      "title": "Runtime",
+      "category": "timing",
+      "summary": "Accumulates how long a piece of equipment has been running.",
+      "how": "While its input indicates the equipment is running, the block adds to a total runtime value that persists as the equipment starts and stops. The accumulated total is available for display, for maintenance thresholds, and for balancing duty between units. A reset input or command clears the total, typically after service. The count is based on the input signal, so it reflects whatever signal is wired in.",
+      "controls": "Commonly used for maintenance and duty tracking, for example accumulating fan or pump hours to trigger a filter change or to balance lead selection.",
+      "inputs": "One on/off input indicating the equipment is running, and usually a reset input or command.",
+      "outputs": "A numeric output holding accumulated runtime, and often a threshold-reached indication.",
+      "tuning": [
+        "The runtime threshold that triggers a maintenance alarm",
+        "The time units used for the accumulated value",
+        "When and how the total is reset after service"
+      ],
+      "watchOut": "Counting the command signal rather than a proven status contact overstates runtime, because hours accumulate even when the equipment failed to start.",
+      "keywords": [
+        "runtime",
+        "hours",
+        "run hours",
+        "maintenance",
+        "duty"
+      ]
+    },
+    "Counter": {
+      "title": "Counter",
+      "category": "timing",
+      "summary": "Counts events or pulses and outputs the running total.",
+      "how": "The block increments its total each time the counting input transitions, so it accumulates a count of events rather than a measure of time. The total is available on the output for comparison against a preset, and a reset input returns it to its starting value. Depending on configuration it may count up, count down, or signal when a preset is reached.",
+      "controls": "Commonly used to count starts or metered pulses, for example tracking compressor starts per hour or totalising a pulse output water meter.",
+      "inputs": "A count input that pulses once per event, plus a reset input and a configured preset where used.",
+      "outputs": "A numeric output holding the accumulated count, and typically a preset-reached indication.",
+      "tuning": [
+        "The preset count that triggers an action or alarm",
+        "The count direction and starting value",
+        "When the count is reset, such as hourly or daily"
+      ],
+      "watchOut": "A noisy or bouncing input registers extra counts, so a fast contact without filtering inflates the total and can trigger a false limit.",
+      "keywords": [
+        "counter",
+        "count",
+        "starts",
+        "pulses",
+        "meter"
+      ]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "category": "timing",
+      "summary": "Drives occupancy or other states from a weekly time-of-day program.",
+      "how": "The block holds a weekly program of day and time entries, each with a value such as occupied, standby, or unoccupied. As the controller clock advances, the block outputs the value for the current time slot, and falls back to its default value outside any defined entry. Exception periods and calendar references can take precedence over the weekly entries for holidays and special days.",
+      "controls": "Commonly used to set building occupancy, for example putting the air handler and its zones into occupied mode during business hours and unoccupied overnight.",
+      "inputs": "The controller time and date, the configured weekly entries, and any linked calendar or exception periods.",
+      "outputs": "An output carrying the current scheduled state, used by mode and setpoint selection logic.",
+      "tuning": [
+        "The weekly day and time entries and their states",
+        "The default value used outside the scheduled periods",
+        "Exception or holiday periods that override the weekly program"
+      ],
+      "watchOut": "A wrong controller clock, time zone, or daylight saving setting shifts every scheduled event, and the building appears to start and stop at the wrong times.",
+      "keywords": [
+        "schedule",
+        "occupancy",
+        "occupied",
+        "unoccupied",
+        "weekly"
+      ]
+    },
+    "Calendar": {
+      "title": "Calendar",
+      "category": "timing",
+      "summary": "Defines dates and date ranges such as holidays for schedules to reference.",
+      "how": "The block holds a list of specific dates, date ranges, and recurring patterns, and indicates whether the current date matches any of them. It does not by itself change equipment operation; schedules reference it so that their exception entries apply on the listed days. Keeping holidays in a calendar means a single list can be reused by several schedules.",
+      "controls": "Commonly used to apply holiday operation, for example keeping the building unoccupied on listed holidays without editing each weekly schedule.",
+      "inputs": "The controller date, plus the configured list of dates, ranges, and recurring entries.",
+      "outputs": "An output indicating whether today matches an entry in the calendar.",
+      "tuning": [
+        "The list of holiday dates and date ranges",
+        "Recurring entries such as a fixed day each year",
+        "Which schedules reference this calendar"
+      ],
+      "watchOut": "Calendars with fixed dates need updating each year, and an expired list quietly stops applying holiday operation.",
+      "keywords": [
+        "calendar",
+        "holiday",
+        "exception",
+        "date",
+        "special day"
+      ]
+    },
+    "BacnetPidLoop": {
+      "title": "BACnet PID loop",
+      "category": "control",
+      "summary": "Closed-loop controller that drives an output to hold a measured value at setpoint.",
+      "how": "The block compares the measured process value with the setpoint and calculates an output that reduces the difference. The proportional term reacts to the size of the current error, the integral term removes remaining offset over time, and the derivative term responds to how quickly the error is changing. The loop action determines whether the output rises or falls as the measurement rises, and output limits keep the command inside a usable range. As a BACnet loop object, its setpoint and tuning are visible on the network.",
+      "controls": "Commonly used to modulate a valve or a VFD, for example holding discharge air temperature at setpoint by adjusting a heating valve.",
+      "inputs": "A measured process value, a setpoint from a constant or reset calculation, and usually an enable input.",
+      "outputs": "A numeric command output, typically zero to one hundred percent, sent to a valve, damper, or drive.",
+      "tuning": [
+        "Proportional band or gain",
+        "Integral time, sometimes called reset time",
+        "Derivative time, often left at zero on HVAC loops",
+        "Loop action, direct or reverse",
+        "Output minimum and maximum limits"
+      ],
+      "watchOut": "Wiring a value into ProportionalBand, IntegralTime or DerivativeTime makes the matching BACnet property read-only, so it can no longer be tuned from the operator interface or trend log. On ECB controllers you must reboot or use Reset PIDS to make it writable again. Use the Feedback input when other blocks sit between the loop and the output, otherwise the loop winds up to 0 or 100% during an override and surges when the override clears.",
+      "keywords": [
+        "pid",
+        "loop",
+        "control loop",
+        "tuning",
+        "proportional"
+      ],
+      "docTopic": "Block Objects › General › Pid Loop (ECB & ECY Series)",
+      "plain": "Modulating control. It measures how far the Input is from the Setpoint and continuously adjusts a 0-100% output to close that gap.",
+      "steps": [
+        "Every scan, calculate the error: Input minus Setpoint.",
+        "Proportional reacts to the error right now — a full proportional band of error swings the output across its entire range.",
+        "Integral accumulates error over time, which removes the steady offset that proportional alone leaves behind.",
+        "Derivative reacts to how fast the error is changing, damping overshoot.",
+        "Add Bias, clamp to 0-100%, and apply Ramp Time as a speed limit on how fast the output may travel."
+      ],
+      "table": {
+        "caption": "What each parameter changes (from Pid Loop configuration theory)",
+        "headers": [
+          "Parameter",
+          "Effect"
+        ],
+        "rows": [
+          [
+            "Proportional Band",
+            "The error that drives the output across its full range. Gain = 100 / band, so a smaller band means a more aggressive loop."
+          ],
+          [
+            "Integral Time",
+            "How quickly accumulated error is worked off. Too fast causes hunting, too slow leaves the offset."
+          ],
+          [
+            "Derivative Time",
+            "Damping based on rate of change. Often left at 0 in HVAC."
+          ],
+          [
+            "Dead Band",
+            "A band centred on the setpoint where the output is left alone."
+          ],
+          [
+            "Bias",
+            "Output percentage when the error is zero."
+          ],
+          [
+            "Ramp Time",
+            "Seconds for the output to travel the full 0-100%."
+          ],
+          [
+            "Action (Reverse)",
+            "Direct: more error, more output. Reverse: more error, less output."
+          ]
+        ]
+      },
+      "example": "Proportional band 2 °F with a 72 °F setpoint: at 74 °F the error is a full band, so proportional alone calls for 100% output. With a 2 °F deadband the loop ignores anything between 71 and 73 °F.",
+      "nullRule": "If any input is Null the output is Null. Setting Enabled to 0 forces the output to 0 and raises the Overridden output."
+    },
+    "BacnetPidResource": {
+      "title": "BACnet PID resource",
+      "category": "control",
+      "summary": "Holds the tuning and configuration values used by a BACnet PID loop.",
+      "how": "The resource carries the loop's stored settings, including proportional band, integral time, derivative time, action, and output limits, and associates them with the PID loop block on the sheet. Editing the resource changes how the loop behaves without altering the wiring. Because the values live in the controller configuration, they are what a download writes and what an operator sees when reviewing loop tuning.",
+      "controls": "Commonly used when adjusting loop behaviour in the field, for example widening the proportional band on a discharge temperature loop that is hunting.",
+      "inputs": "Configuration values entered in the tool or written over the network, rather than wired signal inputs.",
+      "outputs": "Provides the tuning and configuration the associated PID loop block uses.",
+      "tuning": [
+        "Proportional band or gain",
+        "Integral time",
+        "Derivative time",
+        "Direct or reverse action",
+        "Output minimum and maximum"
+      ],
+      "watchOut": "Tuning changed on the network can be overwritten by the next download, so field adjustments need saving back into the program to survive.",
+      "keywords": [
+        "pid resource",
+        "tuning",
+        "proportional band",
+        "integral",
+        "derivative"
+      ]
+    },
+    "PID": {
+      "title": "PID controller",
+      "category": "control",
+      "summary": "Standard three-term loop that modulates an output to maintain a setpoint.",
+      "how": "The block calculates the error between the measured value and the setpoint, then combines proportional, integral, and derivative contributions into a single output command. Integral action accumulates while the loop is enabled, which is what eventually removes steady offset but can also wind up if the output is held at a limit. Disabling the loop normally stops the calculation and releases the output according to configuration.",
+      "controls": "Commonly used wherever a modulating device must hold a condition, for example controlling static pressure with a supply fan drive.",
+      "inputs": "A measured process value, a setpoint, and usually an enable input.",
+      "outputs": "A numeric command output, generally scaled zero to one hundred percent.",
+      "tuning": [
+        "Proportional gain or band",
+        "Integral time",
+        "Derivative time",
+        "Direct or reverse action",
+        "Output clamping limits"
+      ],
+      "watchOut": "Wiring a value into ProportionalBand, IntegralTime or DerivativeTime makes the matching BACnet property read-only, so it can no longer be tuned from the operator interface or trend log. On ECB controllers you must reboot or use Reset PIDS to make it writable again. Use the Feedback input when other blocks sit between the loop and the output, otherwise the loop winds up to 0 or 100% during an override and surges when the override clears.",
+      "keywords": [
+        "pid",
+        "loop",
+        "modulating",
+        "gain",
+        "reset"
+      ],
+      "plain": "Modulating control. It measures how far the Input is from the Setpoint and continuously adjusts a 0-100% output to close that gap.",
+      "steps": [
+        "Every scan, calculate the error: Input minus Setpoint.",
+        "Proportional reacts to the error right now — a full proportional band of error swings the output across its entire range.",
+        "Integral accumulates error over time, which removes the steady offset that proportional alone leaves behind.",
+        "Derivative reacts to how fast the error is changing, damping overshoot.",
+        "Add Bias, clamp to 0-100%, and apply Ramp Time as a speed limit on how fast the output may travel."
+      ],
+      "table": {
+        "caption": "What each parameter changes (from Pid Loop configuration theory)",
+        "headers": [
+          "Parameter",
+          "Effect"
+        ],
+        "rows": [
+          [
+            "Proportional Band",
+            "The error that drives the output across its full range. Gain = 100 / band, so a smaller band means a more aggressive loop."
+          ],
+          [
+            "Integral Time",
+            "How quickly accumulated error is worked off. Too fast causes hunting, too slow leaves the offset."
+          ],
+          [
+            "Derivative Time",
+            "Damping based on rate of change. Often left at 0 in HVAC."
+          ],
+          [
+            "Dead Band",
+            "A band centred on the setpoint where the output is left alone."
+          ],
+          [
+            "Bias",
+            "Output percentage when the error is zero."
+          ],
+          [
+            "Ramp Time",
+            "Seconds for the output to travel the full 0-100%."
+          ],
+          [
+            "Action (Reverse)",
+            "Direct: more error, more output. Reverse: more error, less output."
+          ]
+        ]
+      },
+      "example": "Proportional band 2 °F with a 72 °F setpoint: at 74 °F the error is a full band, so proportional alone calls for 100% output. With a 2 °F deadband the loop ignores anything between 71 and 73 °F.",
+      "nullRule": "If any input is Null the output is Null. Setting Enabled to 0 forces the output to 0 and raises the Overridden output.",
+      "docTopic": "Block Objects › General › Pid Loop configuration theory"
+    },
+    "JPID": {
+      "title": "JPID controller",
+      "category": "control",
+      "summary": "Loop controller variant that adjusts an output toward setpoint with configurable response.",
+      "how": "The block performs closed-loop control in the same way as a standard PID, comparing measurement with setpoint and calculating a command that reduces the error. The variant exists to provide a particular response characteristic suited to certain HVAC processes, so its tuning parameters follow the same principles of gain, reset, and action. Loop behaviour still depends on enabling, output limits, and how the measurement is filtered upstream.",
+      "controls": "Commonly used on slower processes such as space temperature control, where a gentler response avoids overshoot in the occupied space.",
+      "inputs": "A measured process value, a setpoint, and an enable input.",
+      "outputs": "A numeric command output driving a modulating device or a staging calculation.",
+      "tuning": [
+        "Gain or proportional band",
+        "Integral or reset time",
+        "Direct or reverse action",
+        "Output range limits"
+      ],
+      "watchOut": "Wiring a value into ProportionalBand, IntegralTime or DerivativeTime makes the matching BACnet property read-only, so it can no longer be tuned from the operator interface or trend log. On ECB controllers you must reboot or use Reset PIDS to make it writable again. Use the Feedback input when other blocks sit between the loop and the output, otherwise the loop winds up to 0 or 100% during an override and surges when the override clears.",
+      "keywords": [
+        "jpid",
+        "pid",
+        "loop",
+        "space temperature",
+        "tuning"
+      ],
+      "plain": "Modulating control. It measures how far the Input is from the Setpoint and continuously adjusts a 0-100% output to close that gap.",
+      "steps": [
+        "Every scan, calculate the error: Input minus Setpoint.",
+        "Proportional reacts to the error right now — a full proportional band of error swings the output across its entire range.",
+        "Integral accumulates error over time, which removes the steady offset that proportional alone leaves behind.",
+        "Derivative reacts to how fast the error is changing, damping overshoot.",
+        "Add Bias, clamp to 0-100%, and apply Ramp Time as a speed limit on how fast the output may travel."
+      ],
+      "table": {
+        "caption": "What each parameter changes (from Pid Loop configuration theory)",
+        "headers": [
+          "Parameter",
+          "Effect"
+        ],
+        "rows": [
+          [
+            "Proportional Band",
+            "The error that drives the output across its full range. Gain = 100 / band, so a smaller band means a more aggressive loop."
+          ],
+          [
+            "Integral Time",
+            "How quickly accumulated error is worked off. Too fast causes hunting, too slow leaves the offset."
+          ],
+          [
+            "Derivative Time",
+            "Damping based on rate of change. Often left at 0 in HVAC."
+          ],
+          [
+            "Dead Band",
+            "A band centred on the setpoint where the output is left alone."
+          ],
+          [
+            "Bias",
+            "Output percentage when the error is zero."
+          ],
+          [
+            "Ramp Time",
+            "Seconds for the output to travel the full 0-100%."
+          ],
+          [
+            "Action (Reverse)",
+            "Direct: more error, more output. Reverse: more error, less output."
+          ]
+        ]
+      },
+      "example": "Proportional band 2 °F with a 72 °F setpoint: at 74 °F the error is a full band, so proportional alone calls for 100% output. With a 2 °F deadband the loop ignores anything between 71 and 73 °F.",
+      "nullRule": "If any input is Null the output is Null. Setting Enabled to 0 forces the output to 0 and raises the Overridden output.",
+      "docTopic": "Block Objects › General › Pid Loop configuration theory"
+    },
+    "Sequencer": {
+      "title": "Sequencer",
+      "category": "control",
+      "summary": "Turns a demand signal into an ordered set of equipment commands.",
+      "how": "The block takes a demand or capacity input and enables outputs in a defined order as demand rises, releasing them in reverse order as demand falls. Configured thresholds decide where each step engages, and minimum on and off times limit how quickly the pattern can change. The result is an orderly progression through available capacity instead of everything starting together.",
+      "controls": "Commonly used to sequence multiple pieces of equipment, for example bringing on boilers or compressors one at a time as heating or cooling demand grows.",
+      "inputs": "A demand or capacity input, usually from a control loop, plus an enable input and any availability signals.",
+      "outputs": "Several on/off or capacity outputs, one per step of equipment.",
+      "tuning": [
+        "The demand threshold at which each step engages and releases",
+        "Minimum on and minimum off times per step",
+        "The number of steps available",
+        "Interstage delay between changes"
+      ],
+      "watchOut": "Thresholds spaced too closely let several steps engage almost together, defeating the point of sequencing and causing large swings in capacity.",
+      "keywords": [
+        "sequencer",
+        "sequence",
+        "steps",
+        "capacity",
+        "boilers"
+      ]
+    },
+    "Staging": {
+      "title": "Staging",
+      "category": "control",
+      "summary": "Adds and removes stages of equipment as demand rises and falls.",
+      "how": "The block converts a continuous demand input into a whole number of active stages. Stages are added when demand stays above the add threshold for the configured delay and removed when it stays below the remove threshold. Minimum on and off timers protect the equipment from short cycling, and the difference between the add and remove thresholds provides the deadband that keeps the stage count stable.",
+      "controls": "Commonly used for staged heating or cooling, for example engaging electric heat stages or compressor stages in response to a heating or cooling loop output.",
+      "inputs": "A demand input from a loop or calculation, an enable input, and any stage availability or lockout inputs.",
+      "outputs": "On/off outputs for each stage, and often a numeric count of active stages.",
+      "tuning": [
+        "Stage add and stage remove thresholds",
+        "Interstage delay time",
+        "Minimum on and minimum off times",
+        "Number of stages available"
+      ],
+      "watchOut": "Setting the add and remove thresholds too close together makes stages cycle continuously, which shortens compressor life quickly.",
+      "keywords": [
+        "staging",
+        "stages",
+        "compressor",
+        "electric heat",
+        "interstage"
+      ]
+    },
+    "LeadLag": {
+      "title": "Lead lag",
+      "category": "control",
+      "summary": "Chooses which unit leads and which follows, and rotates duty between them.",
+      "how": "The block designates one piece of equipment as lead and the others as lag, then starts the lead first and brings on the lag units as demand requires. Rotation can be driven by runtime hours, elapsed calendar time, or a manual selection, so wear is shared between units. If the lead unit is unavailable or fails, the block promotes a lag unit so the system keeps serving the load.",
+      "controls": "Commonly used on redundant equipment, for example alternating duty between two pumps or two compressors so their run hours stay balanced.",
+      "inputs": "Availability and status inputs for each unit, a demand or stage input, and a rotation trigger such as runtime or a schedule.",
+      "outputs": "Command outputs for each unit, plus an indication of which unit is currently lead.",
+      "tuning": [
+        "Rotation interval or runtime difference that triggers a changeover",
+        "Whether rotation happens on a schedule or on hours",
+        "Which unit is designated lead after a controller restart",
+        "How a failed unit is removed from the rotation"
+      ],
+      "watchOut": "Rotating while the equipment is running can stop and start units unnecessarily, so rotation is normally held until the system is off or lightly loaded.",
+      "keywords": [
+        "lead lag",
+        "rotation",
+        "alternate",
+        "redundant",
+        "pumps"
+      ]
+    },
+    "RampRate": {
+      "title": "Ramp rate",
+      "category": "control",
+      "summary": "Limits how fast a value is allowed to change, smoothing sudden steps.",
+      "how": "The block follows its input but restricts the rate of change of its output to the configured limit, expressed as an amount of change per unit of time. A step change on the input becomes a smooth ramp on the output, which continues until the output catches up with the input. Separate rising and falling rates can often be configured so that increases are gentler than decreases, or the reverse.",
+      "controls": "Commonly used to protect equipment from abrupt commands, for example ramping a fan speed command so the drive accelerates gradually after a mode change.",
+      "inputs": "One numeric input carrying the target value, plus the configured rate limits.",
+      "outputs": "A single numeric output that moves toward the input no faster than the configured rate.",
+      "tuning": [
+        "Rate of change allowed on rising values",
+        "Rate of change allowed on falling values",
+        "The time base the rate is expressed in"
+      ],
+      "watchOut": "A rate that is too slow makes the sequence lag real conditions, and a safety-driven command such as a freeze response may be ramped when it needs to act at once.",
+      "keywords": [
+        "ramp rate",
+        "rate limit",
+        "slew",
+        "soft start",
+        "smooth"
+      ]
+    },
+    "BacnetHardwareInput": {
+      "title": "Hardware input",
+      "category": "io",
+      "summary": "Brings a signal from a physical input terminal into the program as a usable value.",
+      "how": "The block represents a physical terminal on the controller and converts what the terminal measures into a value the logic can use. Its configuration selects the input type, such as thermistor, voltage, current, dry contact, or pulse, and defines how the raw signal range maps onto the engineering range presented to the program and to BACnet. Out-of-range or open-circuit conditions are reflected in the point's reliability rather than in the reading itself.",
+      "controls": "Commonly used for every field measurement, for example a duct temperature sensor, a damper feedback signal, or a differential pressure switch.",
+      "inputs": "The physical wiring at the controller terminal, along with the configured input type and range.",
+      "outputs": "A numeric or on/off value representing the measurement in engineering units.",
+      "tuning": [
+        "Signal low and signal high limits describing the raw input range",
+        "Minimum and maximum values defining the engineering range",
+        "Input type and sensor curve selection",
+        "Calibration offset where provided"
+      ],
+      "watchOut": "A sensor type or range that does not match the installed device gives a reading that looks reasonable but is wrong across the whole span, which misleads every downstream calculation.",
+      "keywords": [
+        "hardware input",
+        "universal input",
+        "sensor",
+        "terminal",
+        "scaling"
+      ]
+    },
+    "BacnetHardwareInputResource": {
+      "title": "Hardware input resource",
+      "category": "io",
+      "summary": "Holds the configuration and scaling values for a hardware input point.",
+      "how": "The resource stores the settings behind a hardware input block, including input type, raw signal limits, engineering minimum and maximum, and BACnet object properties such as name and units. Editing it changes how the terminal is interpreted without touching the logic wiring. These are the values written to the controller on download, and they are what determines the reading the rest of the program sees.",
+      "controls": "Commonly used when commissioning field devices, for example setting the raw range for a zero to ten volt damper feedback and the engineering range it represents.",
+      "inputs": "Configuration entered in the tool or adjusted over the network, rather than wired inputs.",
+      "outputs": "Supplies the configuration used by its hardware input block and the matching BACnet object.",
+      "tuning": [
+        "Signal low and signal high limits for the raw range",
+        "Minimum and maximum engineering values",
+        "Input type and units",
+        "Object name and BACnet metadata"
+      ],
+      "watchOut": "Values marked controller specific can be replaced on download, so use the reinitialize controller specific values option deliberately rather than by habit.",
+      "keywords": [
+        "input resource",
+        "configuration",
+        "scaling",
+        "signal limits",
+        "units"
+      ]
+    },
+    "BacnetHardwareOutput": {
+      "title": "Hardware output",
+      "category": "io",
+      "summary": "Drives a physical output terminal from a value calculated in the program.",
+      "how": "The block takes a command from the logic and converts it into the signal present at the controller terminal, whether that is a relay contact, a triac, or an analog voltage or current. Configuration sets the output type and the range mapping, so a zero to one hundred percent command becomes the correct signal for the connected actuator. The output also appears as a BACnet object, which means network writes at a higher priority can take control of it.",
+      "controls": "Commonly used to command field devices, for example a modulating valve, an outside air damper actuator, or a fan start relay.",
+      "inputs": "A numeric or on/off command from the logic, along with the configured output type and range.",
+      "outputs": "The physical signal at the controller terminal, plus the value shown on the network.",
+      "tuning": [
+        "Minimum and maximum output values",
+        "Default or fail position used when the program releases the output",
+        "Output type and signal range for the connected actuator",
+        "Relinquish default and priority handling"
+      ],
+      "watchOut": "A network write left at a high priority holds the output regardless of the logic, and the sequence appears broken until the command is released.",
+      "keywords": [
+        "hardware output",
+        "actuator",
+        "relay",
+        "valve",
+        "damper"
+      ]
+    },
+    "BacnetHardwareOutputResource": {
+      "title": "Hardware output resource",
+      "category": "io",
+      "summary": "Holds the configuration, scaling, and default values for a hardware output point.",
+      "how": "The resource stores the settings behind a hardware output block, including output type, range, default value, and BACnet object properties. Changing it alters how a command is translated to the terminal without modifying the logic on the sheet. The stored default and relinquish values determine what the terminal does when no logic or network command is present, which matters for safe behaviour after a restart.",
+      "controls": "Commonly used to set safe failure behaviour, for example defining that a heating valve output goes to a defined position when the program releases control.",
+      "inputs": "Configuration entered in the tool or written over the network, rather than wired inputs.",
+      "outputs": "Supplies the configuration used by its hardware output block and the matching BACnet object.",
+      "tuning": [
+        "Minimum and maximum output values",
+        "Default and relinquish default values",
+        "Output type and signal range",
+        "Object name and BACnet metadata"
+      ],
+      "watchOut": "A default that drives the device to full output on restart can cause an unwanted response after a power cycle or download, so it needs checking against the mechanical design.",
+      "keywords": [
+        "output resource",
+        "configuration",
+        "default",
+        "relinquish",
+        "scaling"
+      ]
+    },
+    "BacnetAnalogValue": {
+      "title": "BACnet analog value",
+      "category": "bacnet",
+      "summary": "Software analog point that holds a numeric value and exposes it on the network.",
+      "how": "The block holds a numeric value that is not tied to a physical terminal, such as a setpoint, a calculated result, or an operator-adjustable number. Because it is a BACnet object, the value can be read and written from the network, and writes can arrive at different priorities. Whether the program or the network wins depends on how the point is used, so a point written by logic every scan will overwrite operator changes.",
+      "controls": "Commonly used for adjustable setpoints and calculated values, for example an occupied cooling setpoint the operator can change from the front end.",
+      "inputs": "Either a value written by logic, a value written from the network, or a stored default with no wired input.",
+      "outputs": "A numeric output carrying the current value for use by the logic, and the same value on the network.",
+      "tuning": [
+        "The default or stored value",
+        "Object name, description, and units",
+        "COV increment and reporting period",
+        "Alarm limits where alarming is enabled"
+      ],
+      "watchOut": "If the logic writes to the point every scan, an operator adjustment is overwritten immediately and the setpoint appears not to accept changes.",
+      "keywords": [
+        "analog value",
+        "av",
+        "setpoint",
+        "software point",
+        "adjustable"
+      ]
+    },
+    "BacnetAnalogValueResource": {
+      "title": "BACnet analog value resource",
+      "category": "bacnet",
+      "summary": "Holds the stored configuration and metadata for a BACnet analog value point.",
+      "how": "The resource carries the analog value object's default value, units, object name, COV settings, and any alarm parameters. It defines what the point looks like on the network and what it holds after a download or restart. Editing the resource changes the stored configuration rather than the current live value, so a running controller may not show the change until the point is reinitialised.",
+      "controls": "Commonly used when setting up operator-visible setpoints, for example defining the name, units, and default for a discharge air setpoint.",
+      "inputs": "Configuration entered in the tool or written over the network, rather than wired inputs.",
+      "outputs": "Supplies the configuration used by its analog value block and the matching BACnet object.",
+      "tuning": [
+        "Default value stored for the point",
+        "Object name, description, and units",
+        "COV increment and period",
+        "Alarm enable and alarm limits"
+      ],
+      "watchOut": "Points flagged as controller specific may keep their field value through a download unless explicitly reinitialised, which can leave a site running on an old setpoint.",
+      "keywords": [
+        "analog value resource",
+        "default",
+        "units",
+        "object name",
+        "cov"
+      ]
+    },
+    "BacnetBinaryValue": {
+      "title": "BACnet binary value",
+      "category": "bacnet",
+      "summary": "Software on/off point that holds a two-state value and exposes it on the network.",
+      "how": "The block holds an on/off state that is not attached to a physical terminal, used for enables, mode flags, and operator switches. As a BACnet object it can be written from the network at a given priority as well as driven by logic. Its active and inactive text make the state readable to an operator, and the stored default determines the state after a restart.",
+      "controls": "Commonly used for operator enables and mode flags, for example a network-writable point that allows or blocks economizer operation.",
+      "inputs": "Either an on/off value written by logic, a network write, or a stored default with no wired input.",
+      "outputs": "An on/off output for the logic to use, and the same state on the network.",
+      "tuning": [
+        "Default or stored state",
+        "Active and inactive text shown to operators",
+        "Object name and description",
+        "Alarm enable and alarm state where used"
+      ],
+      "watchOut": "Logic that drives the point continuously prevents an operator write from holding, so an enable switch appears to snap back on its own.",
+      "keywords": [
+        "binary value",
+        "bv",
+        "enable",
+        "flag",
+        "software point"
+      ]
+    },
+    "BacnetBinaryValueResource": {
+      "title": "BACnet binary value resource",
+      "category": "bacnet",
+      "summary": "Holds the stored configuration and metadata for a BACnet binary value point.",
+      "how": "The resource carries the binary value object's default state, active and inactive text, object name, and any alarm configuration. It defines how the point presents on the network and what state it holds after download or restart. Changes here affect the stored configuration rather than the live value in a running controller.",
+      "controls": "Commonly used when preparing operator-facing switches, for example naming an occupancy override point and setting its default state to off.",
+      "inputs": "Configuration entered in the tool or written over the network, rather than wired inputs.",
+      "outputs": "Supplies the configuration used by its binary value block and the matching BACnet object.",
+      "tuning": [
+        "Default or stored state",
+        "Active and inactive text",
+        "Object name and description",
+        "Alarm enable and alarm parameters"
+      ],
+      "watchOut": "Active and inactive text that does not match the mechanical reality, such as labelling a closed damper as open, misleads operators during troubleshooting.",
+      "keywords": [
+        "binary value resource",
+        "default",
+        "active text",
+        "object name",
+        "configuration"
+      ]
+    },
+    "BacnetMultiStateValue": {
+      "title": "BACnet multi-state value",
+      "category": "bacnet",
+      "summary": "Software point that holds one of several named states and exposes it on the network.",
+      "how": "The block holds a state number, each number corresponding to a named state such as occupied, standby, or unoccupied. Logic and the network can read the state, and it can be written where the design allows. Downstream compare or select blocks decode the number into the branches of the sequence, so the mapping between numbers and names must match the logic exactly.",
+      "controls": "Commonly used to carry an operating mode, for example holding the unit mode as off, heating, cooling, or ventilation for the rest of the program to act on.",
+      "inputs": "A state number written by logic or from the network, or a stored default.",
+      "outputs": "A numeric state output used by mode decoding logic, and the named state on the network.",
+      "tuning": [
+        "Number of states and the text for each",
+        "Default state after restart",
+        "Object name and description",
+        "Which state numbers the logic treats as significant"
+      ],
+      "watchOut": "State numbering normally starts at one, so treating the first state as zero shifts every mode by one position and sends the sequence to the wrong branch.",
+      "keywords": [
+        "multi state value",
+        "msv",
+        "mode",
+        "state",
+        "occupancy"
+      ]
+    },
+    "BacnetMultiStateValueResource": {
+      "title": "BACnet multi-state value resource",
+      "category": "bacnet",
+      "summary": "Holds the state list, default, and metadata for a BACnet multi-state value point.",
+      "how": "The resource defines how many states the point has, the text for each state, the default state, and the BACnet object properties. It determines what an operator sees when reading or writing the mode, and what state the point holds after a download or restart. Editing the resource changes configuration rather than the live value in a running controller.",
+      "controls": "Commonly used when defining operating modes, for example listing the unit mode states and choosing which one the controller starts in.",
+      "inputs": "Configuration entered in the tool or written over the network, rather than wired inputs.",
+      "outputs": "Supplies the state list and configuration used by its multi-state value block.",
+      "tuning": [
+        "Number of states and the text for each",
+        "Default state after restart",
+        "Object name and description",
+        "Alarm configuration where used"
+      ],
+      "watchOut": "Adding or reordering states without updating the decoding logic changes what each number means, and the sequence then selects the wrong mode.",
+      "keywords": [
+        "multi state resource",
+        "states",
+        "state text",
+        "default",
+        "mode"
+      ]
+    },
+    "ComSensor": {
+      "title": "Communicating sensor",
+      "category": "io",
+      "summary": "Brings values from a sensor on the communication bus into the program.",
+      "how": "The block represents a sensor or room device that communicates with the controller over a bus rather than through a physical input terminal. Its values arrive as registers that are mapped to BACnet objects inside the controller, so a single device can provide temperature, humidity, setpoint adjustment, and occupancy detection at once. Because the data depends on communication, a lost device leaves the mapped values stale or unreliable.",
+      "controls": "Commonly used for room sensors and wall modules, for example a communicating room unit supplying space temperature, local setpoint adjustment, and occupancy status.",
+      "inputs": "The bus connection and the configured register-to-object mapping for the device.",
+      "outputs": "Several values representing the readings and states the device reports.",
+      "tuning": [
+        "Device address on the bus",
+        "Register to object mapping for each reported value",
+        "Write priority used when writing back to the device",
+        "Local setpoint adjustment range where supported"
+      ],
+      "watchOut": "A communication loss leaves the last reported values in place, so the sequence may keep controlling from a stale space temperature unless validity is checked.",
+      "keywords": [
+        "com sensor",
+        "communicating sensor",
+        "wall module",
+        "room sensor",
+        "bus"
+      ]
+    },
+    "IncomingTag": {
+      "title": "Incoming tag",
+      "category": "reference",
+      "summary": "Receives a value published elsewhere in the program without a drawn wire.",
+      "how": "The block acts as the receiving end of a named reference. A matching outgoing tag publishes a value under a given name, and every incoming tag with that name presents the same value on its output. This keeps sheets readable when a signal is needed in several places. The link depends entirely on the name matching, so the value follows the name rather than any visible connection.",
+      "controls": "Commonly used to reuse a common signal, for example bringing an occupancy state or an outside air temperature into several logic sheets.",
+      "inputs": "The named reference itself, resolved from the matching outgoing tag.",
+      "outputs": "A single output carrying the referenced value for local use.",
+      "tuning": [
+        "The tag name the block subscribes to",
+        "Which outgoing tag publishes that name"
+      ],
+      "watchOut": "If no hub publishes the name, the target reads nothing. In EC-gfxProgram, Go To Source jumps to the hub — the Trace button here does the same thing and keeps following the chain.",
+      "keywords": [
+        "incoming tag",
+        "tag",
+        "reference",
+        "cross sheet",
+        "link"
+      ],
+      "docTopic": "Block Objects › Tools › Reference Target",
+      "plain": "Reads a value published elsewhere by name (officially a Reference Target). It is the receiving end of a reference tag.",
+      "steps": [
+        "The target is configured with a TagName.",
+        "Each scan it takes the current value from the hub publishing that name.",
+        "That value feeds whatever the target is wired into."
+      ],
+      "example": "A damper sheet drops in a target for outdoor_temp instead of running a wire back to the sensor on the inputs sheet."
+    },
+    "OutgoingTag": {
+      "title": "Outgoing tag",
+      "category": "reference",
+      "summary": "Publishes a value under a name so other sheets can reference it.",
+      "how": "The block takes a value from the local logic and publishes it under a tag name. Incoming tags elsewhere in the program with the same name then present that value on their outputs. Only one outgoing tag should publish a given name, since more than one source for the same name makes the resulting value ambiguous and hard to trace.",
+      "controls": "Commonly used to share a calculated result, for example publishing a system heating demand so several sheets can act on the same number.",
+      "inputs": "One input carrying the value to be published.",
+      "outputs": "Publishes the value under the configured tag name rather than on a drawn wire.",
+      "tuning": [
+        "The tag name used for publication",
+        "Which value is wired in as the source"
+      ],
+      "watchOut": "Only one hub should publish a given name. Two hubs on the same tag means the value depends on which one executes last, which is why the connection report flags it.",
+      "keywords": [
+        "outgoing tag",
+        "tag",
+        "publish",
+        "reference",
+        "cross sheet"
+      ],
+      "docTopic": "Block Objects › Tools › Reference Hub",
+      "plain": "Publishes a value under a name (officially a Reference Hub) so other sheets can use it without drawing a wire across the page.",
+      "steps": [
+        "A block output is wired into the hub.",
+        "The hub holds that value under its TagName.",
+        "Any Reference Target with the same TagName, anywhere in the project, reads it."
+      ],
+      "example": "The heating sequence publishes heat_enable once; the fan sheet, the damper sheet and the alarm sheet each read it without a single cross-page wire."
+    },
+    "InternalConstantNumeric": {
+      "title": "Internal numeric constant",
+      "category": "constant",
+      "summary": "Fixed number wired into the logic and not exposed as a network point.",
+      "how": "The block supplies a fixed numeric value to whatever it is wired to, and that value does not change while the program runs. It is not a named BACnet object, so an operator cannot see or adjust it from the network. Changing the value requires editing the program in the tool and downloading it. Values of one or zero often act as fixed enables, and small fractions frequently serve as multipliers.",
+      "controls": "Commonly used for hard-coded thresholds and factors, for example a fixed delay time in seconds or a scaling factor inside a calculation.",
+      "inputs": "None; the value comes from the block's own configuration.",
+      "outputs": "A single numeric output holding the configured constant.",
+      "tuning": [
+        "The numeric value itself",
+        "Whether the value should instead be an adjustable analog value point"
+      ],
+      "watchOut": "Because the value is invisible from the network, a site tuning problem hidden in an internal constant can only be found by opening the program.",
+      "keywords": [
+        "internal constant",
+        "fixed value",
+        "hard coded",
+        "numeric",
+        "multiplier"
+      ]
+    },
+    "SetpointConstant": {
+      "title": "Setpoint constant",
+      "category": "constant",
+      "summary": "Fixed setpoint value supplied to the logic as a control target.",
+      "how": "The block holds a numeric value intended to act as a control target, such as a temperature, pressure, or percentage setpoint, and presents it on its output. It is meant to be read as a setpoint on the sheet rather than as an arbitrary number, which makes the sequence easier to follow. Whether it is adjustable from the network depends on how it is exposed in the program.",
+      "controls": "Commonly used to define a control target, for example the discharge air temperature setpoint fed into a heating loop.",
+      "inputs": "None; the value comes from the block's own configuration.",
+      "outputs": "A single numeric output carrying the setpoint value.",
+      "tuning": [
+        "The setpoint value and its units",
+        "Whether the setpoint needs to be operator adjustable rather than fixed"
+      ],
+      "watchOut": "A fixed setpoint cannot follow a reset strategy, so a building that needs seasonal adjustment will be tuned by hand unless the value is replaced with a calculated setpoint.",
+      "keywords": [
+        "setpoint",
+        "constant",
+        "target",
+        "fixed setpoint",
+        "control target"
+      ]
+    },
+    "NumericConstant": {
+      "title": "Numeric constant",
+      "category": "constant",
+      "summary": "Fixed number placed on the sheet and wired to other blocks.",
+      "how": "The block outputs a single configured number that stays the same for as long as the program runs. It provides the reference values that compare blocks test against, the factors that math blocks use, and the fixed times that timers count to. Because there is no input, the output never changes unless the program is edited and downloaded.",
+      "controls": "Commonly used to supply thresholds and factors, for example the low ambient limit that a compressor lockout comparison tests against.",
+      "inputs": "None; the value comes from the block's own configuration.",
+      "outputs": "A single numeric output carrying the configured value.",
+      "tuning": [
+        "The numeric value itself",
+        "The units the value is assumed to be in by the receiving block"
+      ],
+      "watchOut": "The same number often appears in several places, so changing one copy while leaving the others behind creates inconsistent behaviour across the sequence.",
+      "keywords": [
+        "numeric constant",
+        "number",
+        "threshold",
+        "fixed value",
+        "reference"
+      ]
+    },
+    "EnumConstant": {
+      "title": "Enumerated constant",
+      "category": "constant",
+      "summary": "Fixed state or mode value used to compare against or command a state.",
+      "how": "The block outputs a fixed value drawn from a defined set of named states, such as an occupancy state or an equipment mode. It is typically wired into a compare block to test whether the current state matches, or into a select or write path to command a particular state. Because the value is one of a list, it stays meaningful only while the list it belongs to is unchanged.",
+      "controls": "Commonly used in mode decoding, for example providing the occupied state value that a schedule output is compared against.",
+      "inputs": "None; the value comes from the block's own configuration.",
+      "outputs": "A single output carrying the selected enumerated value.",
+      "tuning": [
+        "Which named state the block holds",
+        "That the state list matches the point or block it is compared with"
+      ],
+      "watchOut": "If the state list on the associated point is reordered or renumbered, this constant still holds its old value and the comparison then matches the wrong mode.",
+      "keywords": [
+        "enum constant",
+        "enumerated",
+        "state",
+        "mode",
+        "occupancy"
+      ]
+    },
+    "BooleanConstant": {
+      "title": "Boolean constant",
+      "category": "constant",
+      "summary": "Fixed on or off value wired into the logic.",
+      "how": "The block supplies a permanent on or off state to whatever it is connected to. It is used to hard-wire a permissive on, to disable an unused branch, or to hold an input at a known state so the rest of the logic behaves predictably. The value never changes while the program runs, so any branch depending on it is effectively fixed.",
+      "controls": "Commonly used to hold a feature on or off, for example forcing an enable on a permissive input where the site has no corresponding field device.",
+      "inputs": "None; the value comes from the block's own configuration.",
+      "outputs": "A single on/off output holding the configured state.",
+      "tuning": [
+        "Whether the value is set to on or off",
+        "Whether the branch should instead be driven by a real signal or an operator point"
+      ],
+      "watchOut": "A constant used to bypass a safety or interlock during commissioning and then left in place removes that protection permanently.",
+      "keywords": [
+        "boolean constant",
+        "true",
+        "false",
+        "on",
+        "off"
+      ]
+    },
+    "SimpleCompositeBlock": {
+      "title": "Composite module",
+      "category": "composite",
+      "summary": "Container block holding a complete sub-sequence behind named input and output ports.",
+      "how": "The block wraps a group of logic on its own internal sheet and exposes only named ports on the outside. Values enter through the input ports, the internal logic runs, and results leave through the output ports. Input ports typically have a default or override value that applies when nothing is wired to them, which is what an unwired composite input falls back to. Opening the block shows the internal logic that actually performs the work.",
+      "controls": "Commonly used to package a reusable sequence, for example a ventilation or economizer module that appears as one block on the main sheet.",
+      "inputs": "Named input ports such as an enable, a demand, or a sensor value, each with its own default or override value.",
+      "outputs": "Named output ports carrying the results the internal logic produced.",
+      "tuning": [
+        "Default or override values on the named input ports",
+        "Constants and setpoints inside the module",
+        "Which external signals are wired to each port"
+      ],
+      "watchOut": "Behaviour that cannot be explained from the outside usually comes from a constant or override inside the module, so the internal sheet has to be opened before drawing conclusions.",
+      "keywords": [
+        "composite",
+        "module",
+        "sub sequence",
+        "container",
+        "ports"
+      ]
+    },
+    "Alarm": {
+      "title": "Alarm",
+      "category": "alarm",
+      "summary": "Detects an abnormal condition and reports it to operators and the network.",
+      "how": "The block watches a condition or a value against limits and changes to an alarm state when the condition persists beyond its configured delay. The delay keeps normal transients from producing nuisance alarms. When the condition clears, the block returns to normal, and depending on configuration it may require acknowledgement first. Alarm state and text are presented on the network so a front end can display and log the event.",
+      "controls": "Commonly used to report equipment and sensor problems, for example raising an alarm when a fan is commanded on but no airflow is proven.",
+      "inputs": "The condition or value being monitored, plus any enable input that suppresses alarming while equipment is off.",
+      "outputs": "An alarm state output for the logic, and the alarm notification presented on the network.",
+      "tuning": [
+        "Alarm limits or trigger condition",
+        "Alarm delay time before reporting",
+        "Alarm enable and suppression conditions",
+        "Priority and message text presented to operators"
+      ],
+      "watchOut": "Alarming without suppressing while the equipment is intentionally off floods the operator with alarms every night, and real faults get lost in the noise.",
+      "keywords": [
+        "alarm",
+        "notification",
+        "fault",
+        "event",
+        "limit"
+      ]
+    },
+    "Latch": {
+      "title": "Latch",
+      "category": "logic",
+      "summary": "Remembers an on/off state: Set turns it on and it stays on until Reset turns it off.",
+      "how": "A set-reset memory. A momentary pulse on Set drives the output On and holds it there with no further input. A pulse on Reset drives it Off and holds. When both inputs are off the output simply holds its last state, which is what makes it useful for latching alarms and push-button control.",
+      "controls": "Typically used for latching alarms that must be acknowledged, for push-button lighting control, and for holding equipment on after a momentary start command.",
+      "inputs": "Set and Reset, both on/off.",
+      "outputs": "A single on/off output that holds its state between commands.",
+      "tuning": [
+        "Persist, which decides whether the state survives a controller reset"
+      ],
+      "keywords": [
+        "latch",
+        "set",
+        "reset",
+        "memory",
+        "hold",
+        "alarm"
+      ],
+      "docTopic": "Block Objects › General › Latch",
+      "plain": "A memory cell. A pulse on Set turns it on and it stays on; a pulse on Reset turns it off and it stays off.",
+      "steps": [
+        "Set On while Reset is Off → output On and hold.",
+        "Reset On while Set is Off → output Off and hold.",
+        "Both inputs Off → hold whatever the output already was.",
+        "Both inputs On → hold as well; neither input wins."
+      ],
+      "table": {
+        "caption": "Latch truth table (from the help file)",
+        "headers": [
+          "Set",
+          "Reset",
+          "Output"
+        ],
+        "rows": [
+          [
+            "0",
+            "0",
+            "No change"
+          ],
+          [
+            "1",
+            "0",
+            "1"
+          ],
+          [
+            "0",
+            "1",
+            "0"
+          ],
+          [
+            "1",
+            "1",
+            "No change"
+          ]
+        ]
+      },
+      "example": "A momentary light switch sets the latch, the lights come on, and a 60 minute Start Delay pulses Reset to turn them back off.",
+      "nullRule": "If any input is Null, the output is Null — not zero.",
+      "watchOut": "Turn on Persist if the state must survive a controller reset — and note that a new persistent block needs Reset Persistent Value run once after the first download."
+    }
+  }
+}

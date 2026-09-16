@@ -1,14 +1,17 @@
-const APP_VERSION = "1.13.1";
+const APP_VERSION = "1.19.0";
 const PARAM_HELP_PATH = `./param_help.json?v=${APP_VERSION}`;
 const DISTECH_DOCS = "https://docs.distech-controls.com/bundle/gfx_UG/page/en-US/845626251.html";
 const WIRING_STORAGE_PREFIX = "distechGfxWiring_";
 const LIBRARY_STORAGE_PREFIX = "distechGfxLibrary_";
 const LIBRARY_CATALOG_PATH = `./library-catalog.json?v=${APP_VERSION}`;
+const CANVAS_HANDOFF_DB = "distechGfxHandoff";
+const CANVAS_HANDOFF_STORE = "files";
 
 const gfxInput = document.getElementById("gfxFile");
 const libraryFolderInput = document.getElementById("libraryFolder");
 const loadLibraryBtn = document.getElementById("loadLibraryBtn");
 const openLibraryBtn = document.getElementById("openLibraryBtn");
+const openCanvasBtn = document.getElementById("openCanvasBtn");
 const focusBlockSearchBtn = document.getElementById("focusBlockSearchBtn");
 const blockSearchInput = document.getElementById("blockSearchInput");
 const blockSearchResults = document.getElementById("blockSearchResults");
@@ -89,6 +92,7 @@ function resetState() {
   generateBtn.disabled = true;
   exportCsvBtn.disabled = true;
   if (openWiringBtn) openWiringBtn.disabled = true;
+  if (openCanvasBtn) openCanvasBtn.disabled = true;
   if (focusBlockSearchBtn) focusBlockSearchBtn.disabled = true;
   if (openLibraryBtn) openLibraryBtn.disabled = !appState.libraryCatalog;
   if (wiringLaunch) wiringLaunch.hidden = true;
@@ -906,9 +910,14 @@ function blockIdFromParam(param) {
   return match ? match[1] : "";
 }
 
-async function loadTemplate() {
+/**
+ * @param {{name: string, buffer: ArrayBuffer}} [shared]
+ *   Supplied when another tool already has this project open, so we can skip
+ *   the file picker. A file input's value cannot be set programmatically.
+ */
+async function loadTemplate(shared) {
   clearLog();
-  if (!gfxInput.files || !gfxInput.files[0]) {
+  if (!shared && (!gfxInput.files || !gfxInput.files[0])) {
     log("Please choose a template .gfx file.");
     return;
   }
@@ -917,8 +926,8 @@ async function loadTemplate() {
   loadBtn.textContent = "Loading…";
   try {
     await loadParamHelp();
-    const file = gfxInput.files[0];
-    const buffer = await file.arrayBuffer();
+    const file = shared || gfxInput.files[0];
+    const buffer = shared ? shared.buffer : await file.arrayBuffer();
     const archive = await GfxCore.loadGfxArchive(buffer);
 
     appState.fileName = file.name;
@@ -931,6 +940,12 @@ async function loadTemplate() {
     };
     appState.parameters = GfxCore.cloneParameters(archive.parameters);
     appState.wiringGraph = archive.wiringGraph;
+
+    // Share it so the Logic Canvas and the other tools open the same project.
+    window.GfxShared?.setCurrentFile(file.name, buffer).then(() => {
+      window.GfxShared?.updateNavFile(file.name);
+    });
+
     appState.originalSnapshot = snapshotParameters(appState.parameters);
     appState.manualEdits = new Set();
 
@@ -947,6 +962,7 @@ async function loadTemplate() {
     generateBtn.disabled = false;
     exportCsvBtn.disabled = false;
     if (openWiringBtn) openWiringBtn.disabled = false;
+    if (openCanvasBtn) openCanvasBtn.disabled = false;
     if (wiringLaunch) wiringLaunch.hidden = false;
     if (wiringLaunchText && archive.wiringGraph) {
       const sequence = GfxCore.buildRunSequence
@@ -1007,9 +1023,86 @@ async function loadTemplate() {
   }
 }
 
+/*
+ * The canvas edits Main.xml structurally, so it needs the archive itself rather than
+ * the compacted wiring graph the other viewers receive. IndexedDB is the only storage
+ * that comfortably holds a multi-megabyte ArrayBuffer.
+ */
+function saveCanvasHandoff(key, payload) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CANVAS_HANDOFF_DB, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(CANVAS_HANDOFF_STORE);
+    };
+    request.onerror = () => reject(request.error || new Error("IndexedDB unavailable"));
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(CANVAS_HANDOFF_STORE, "readwrite");
+      tx.objectStore(CANVAS_HANDOFF_STORE).put(payload, key);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error || new Error("Could not stage the project"));
+      };
+    };
+  });
+}
+
+async function openLogicCanvas() {
+  const buffer = appState.archive?.originalBuffer;
+  if (!buffer) {
+    window.open("index.html", "_blank", "noopener");
+    return;
+  }
+  const key = `canvas_${Date.now()}`;
+  try {
+    await saveCanvasHandoff(key, { fileName: appState.fileName, buffer });
+    window.open(`index.html?handoff=${encodeURIComponent(key)}`, "_blank", "noopener");
+  } catch (error) {
+    log(`Could not pass the project to the canvas (${error.message}). Opening an empty canvas instead.`);
+    window.open("index.html", "_blank", "noopener");
+  }
+}
+
+/** Offer whatever project another tool currently has open. */
+async function offerSharedFile() {
+  const name = window.GfxShared?.currentFileName();
+  if (!name) return;
+
+  const banner = document.createElement("div");
+  banner.className = "gfx-resume";
+  banner.innerHTML = `
+    <span><strong>${name}</strong> is open in another tool.</span>
+    <button type="button" data-resume-open>Load it here</button>
+    <button type="button" class="ghost" data-resume-dismiss>Start fresh</button>`;
+  loadBtn.closest("div")?.parentElement?.insertBefore(banner, loadBtn.closest("div")) ||
+    document.querySelector(".card")?.prepend(banner);
+
+  banner.querySelector("[data-resume-dismiss]").addEventListener("click", () => banner.remove());
+  banner.querySelector("[data-resume-open]").addEventListener("click", async () => {
+    const payload = await window.GfxShared?.getCurrentFile();
+    if (!payload?.buffer) {
+      log("That project is no longer available. Choose a file instead.");
+      banner.remove();
+      return;
+    }
+    banner.remove();
+    await loadTemplate({ name: payload.fileName || name, buffer: payload.buffer });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.GfxShared?.renderNav("explorer");
+  offerSharedFile();
+});
+
 generateBtn.addEventListener("click", generateGfx);
 generateBtnInline.addEventListener("click", generateGfx);
 exportCsvBtn.addEventListener("click", exportCsv);
+if (openCanvasBtn) openCanvasBtn.addEventListener("click", openLogicCanvas);
 if (openWiringBtn) openWiringBtn.addEventListener("click", () => openWiringViewer());
 if (loadLibraryBtn) loadLibraryBtn.addEventListener("click", loadLibraryFolder);
 if (openLibraryBtn) openLibraryBtn.addEventListener("click", openLibraryViewer);

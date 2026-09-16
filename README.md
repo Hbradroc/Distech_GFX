@@ -1,20 +1,36 @@
-# Distech GFX Parameter Editor
+# Distech GFX Toolkit
 
-Web tool and CLI helper for editing EC-gfxProgram `.gfx` project parameters without manually unpacking XML.
+Browser tools and a CLI helper for reading, explaining and editing EC-gfxProgram `.gfx` projects without manually unpacking XML.
 
-Similar workflow to [dvf2Json](https://github.com/Hbradroc/dvf2Json): upload a file in the browser, edit parameters, download the result.
+Similar workflow to [dvf2Json](https://github.com/Hbradroc/dvf2Json): open a file in the browser, work on it, download the result.
 
 ## Web app
 
 Live site (after GitHub Pages is enabled): `https://hbradroc.github.io/Distech_GFX/`
 
-### Use in the browser
+The landing page is the **Logic Canvas**. Every page carries a **Tools** dropdown in its header for switching between the five views, and the `.gfx` you open is shared between them — open a file once and each tool offers to pick it up.
 
-1. Open the web app.
-2. Upload an EC-gfxProgram `.gfx` **template** file (loads automatically).
-3. All parameters are listed on the page — edit any values you need.
-4. Click **Generate .gfx** to write your values into the template and download the updated file.
-5. Import the generated file in **EC-gfxProgram** and verify before downloading to a controller.
+| Tool | Page | What it is for |
+|------|------|----------------|
+| Logic Canvas | `index.html` | Interactive diagram: pan/zoom, drill into custom blocks, trace a signal, insert library blocks, export |
+| Parameter Explorer | `explorer.html` | Search and bulk-edit every parameter, then generate a new `.gfx` |
+| Logic Diagram Viewer | `wiring.html` | Printable cross-reference of every connection |
+| Rung View | `rung-view.html` | Sequential ladder-style listing of one sheet |
+| Library Match | `library-view.html` | Which project blocks came from your Library snippets |
+
+### Logic Canvas
+
+- **See the logic.** Sheets render as an interactive SVG diagram. Double-click a custom block to open its internals; the breadcrumb, an **↑ Back** button or `Esc` takes you back out.
+- **Understand a block.** Selecting a block explains it in plain terms, with a step-by-step account of how it evaluates, truth tables for the logic and comparator blocks, a worked example, and what happens when an input is Null. Behavioural facts come from the EC-gfxProgram help file and each entry cites its source topic.
+- **Trace a signal.** Pick any reference tag and get the end-to-end routes it takes, from a physical input, through the logic, across sheet boundaries via reference hubs and targets, to the output it eventually drives. Duplicate routes are collapsed, and any step can jump the canvas straight to that block.
+- **Insert with a sanity check.** Before placing a library block you are told how it would fit this project; after placing it you get a connection report covering inputs nothing feeds, outputs nothing reads, tags that would end up with two writers, and whether the new logic reaches a physical output.
+
+### Parameter Explorer
+
+1. Open an EC-gfxProgram `.gfx` **template** file (loads automatically).
+2. All parameters are listed on the page — edit any values you need.
+3. Click **Generate .gfx** to write your values into the template and download the updated file.
+4. Import the generated file in **EC-gfxProgram** and verify before downloading to a controller.
 
 ### Run locally
 
@@ -84,14 +100,30 @@ python gfx_param_tool.py apply project.gfx parameters.csv -o project_modified.gf
 
 | File | Description |
 |------|-------------|
-| `index.html` | Web UI |
-| `app.js` | Browser UI logic |
+| `index.html` | Logic Canvas — the landing page |
+| `canvas.js` / `canvas.css` | Canvas rendering, explanations, signal tracing, insert checks |
+| `gfx-edit.js` | Structural XML editing: insert snippets, move, link, delete, with ID/namespace remapping |
+| `block-knowledge.json` | Beginner-facing explanations per block type, grounded in the EC-gfxProgram help file |
+| `explorer.html` | Parameter Explorer UI |
+| `app.js` | Parameter Explorer logic |
 | `gfx-core.js` | Parse / apply GFX parameters in the browser (all sections) |
+| `gfx-shared.js` / `gfx-shared.css` | Cross-tool page picker and the shared "currently open file" |
 | `param_help.json` | Parameter descriptions for the editor help panel |
 | `wiring.html` | Read-only logic wiring viewer (print / PDF) |
 | `wiring.js` / `wiring.css` | Wiring viewer UI |
 | `styles.css` | Shared styling (matches dvf2Json look) |
 | `gfx_param_tool.py` | Command-line helper |
+| `test/` | Node test scripts: structural round-trip checks and a synthetic project generator |
+
+## Tests
+
+```bash
+npm install
+node test/edit-roundtrip.mjs      # structural edits survive serialize / re-parse
+node test/make-fixture.mjs        # build a multi-sheet sample project from Library snippets
+```
+
+`make-fixture.mjs` assembles a five-sheet `.gfx` from real Library snippets chosen so their reference tags interlock, which gives the canvas something with genuine cross-sheet signal chains to trace. It is a development fixture, not a controller-ready project.
 
 ## Deploy to GitHub Pages
 

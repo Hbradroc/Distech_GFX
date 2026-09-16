@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distech GFX Parameter Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="gfx-shared.css?v=1.19.0" />
+    <link rel="stylesheet" href="styles.css?v=1.19.0" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script defer src="gfx-shared.js?v=1.19.0"></script>
+    <script defer src="gfx-core.js?v=1.19.0"></script>
+    <script defer src="app.js?v=1.19.0"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <div class="card-top">
+          <div class="card-top-actions">
+            <span data-gfx-nav></span>
+            <a class="email-link" href="mailto:hbradroc@uwo.ca" aria-label="Email hbradroc@uwo.ca">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.2-8 5.2-8-5.2V6l8 5 8-5v2.2Z" />
+              </svg>
+              <span>hbradroc@uwo.ca</span>
+            </a>
+          </div>
+        </div>
+
+        <h1>Distech GFX Editor</h1>
+        <p class="sub">
+          Upload an EC-gfxProgram <code>.gfx</code> template. Job setpoints are shown first;
+          enable <strong>Other variables</strong> for logic constants, BACnet metadata, and com sensor registers.
+          Click <strong>Generate .gfx</strong> when done.
+        </p>
+
+        <div class="field">
+          <label for="gfxFile">Template file (.gfx)</label>
+          <input id="gfxFile" type="file" accept=".gfx" />
+        </div>
+
+        <details class="library-override">
+          <summary>Optional: replace with a local Library folder</summary>
+          <label for="libraryFolder">Library folder (.sptx snippets)</label>
+          <input id="libraryFolder" type="file" webkitdirectory multiple />
+          <p class="field-hint">Only needed if you have newer snippets than the GitHub <code>Library/</code> folder. Rebuild <code>library-catalog.json</code> with <code>build_library_catalog.py</code> after updating.</p>
+          <button id="loadLibraryBtn" type="button" class="secondary">Replace library from folder</button>
+        </details>
+
+        <div class="actions">
+          <button id="loadBtn" type="button">Load template</button>
+          <button id="openCanvasBtn" type="button" class="secondary" disabled>Open logic canvas</button>
+          <button id="openLibraryBtn" type="button" class="secondary" disabled>Open library match</button>
+          <button id="generateBtn" type="button" disabled>Generate .gfx</button>
+          <button id="exportCsvBtn" type="button" class="secondary" disabled>Export CSV</button>
+        </div>
+
+        <p id="readyHint" class="ready-hint" hidden>
+          Template loaded — edit parameters below, then click <strong>Generate .gfx</strong>.
+        </p>
+
+        <pre id="log" class="log" aria-live="polite"></pre>
+      </section>
+      <p class="footer-note">Systemair 467 · <span id="appVersion"></span></p>
+    </main>
+
+    <section id="parameterSection" class="parameter-section" hidden>
+      <aside id="wiringLaunch" class="wiring-launch-corner" hidden aria-label="Logic wiring viewer">
+        <h3>Logic cross-reference</h3>
+        <p id="wiringLaunchText">See run order (first→second→third), where tags are used, and sheet wiring.</p>
+        <button type="button" id="openWiringBtn" class="secondary" disabled>Open wiring viewer</button>
+        <button type="button" id="focusBlockSearchBtn" class="secondary" disabled>Search blocks</button>
+      </aside>
+      <div class="parameter-card">
+        <header class="parameter-header">
+          <div>
+            <h2 id="parameterTitle">Parameters</h2>
+            <p id="parameterSubtitle" class="parameter-subtitle"></p>
+          </div>
+          <div class="parameter-header-actions">
+            <button type="button" id="generateBtnInline" class="generate-inline">Generate .gfx</button>
+          </div>
+        </header>
+
+        <section id="blockSearchSection" class="block-search-section" aria-label="Block search">
+          <h3>Search blocks &amp; tags</h3>
+          <p class="field-hint">Example: type <code>comp_low</code> — select it to see ladder rungs (what feeds it and what it controls).</p>
+          <div class="block-search-bar">
+            <input type="search" id="blockSearchInput" placeholder="Search tag or block (e.g. comp_low, fan_supply, Input Valid)…" autocomplete="off" />
+          </div>
+          <div id="blockSearchResults" class="block-search-results" hidden></div>
+        </section>
+
+        <div class="editor-toolbar">
+          <input type="search" id="paramSearch" placeholder="Search parameter name…" autocomplete="off" />
+          <select id="categoryFilter" aria-label="Filter by section or category">
+            <option value="">All sections</option>
+          </select>
+          <label class="filter-toggle">
+            <input type="checkbox" id="showOtherVariables" />
+            Other variables
+          </label>
+          <label class="filter-toggle">
+            <input type="checkbox" id="changedOnly" />
+            Changed only
+          </label>
+        </div>
+
+        <p class="editor-meta" id="editorMeta"></p>
+
+        <div class="parameter-body">
+          <div class="editor-list" id="editorList"></div>
+          <aside class="editor-help" id="editorHelp" aria-live="polite">
+            <p class="editor-help-placeholder">Click a parameter or <strong>Info</strong> for EC-gfxProgram notes.</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <div id="blockDetailOverlay" class="detail-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="detailOverlayTitle">
+      <div class="detail-overlay-backdrop" data-detail-close></div>
+      <div class="detail-overlay-panel">
+        <header class="detail-overlay-bar">
+          <button type="button" id="detailBackBtn" class="secondary" data-detail-close>← Back</button>
+          <strong id="detailOverlayTitle">Block detail</strong>
+          <button type="button" id="detailMinimizeBtn" class="secondary">Minimize</button>
+        </header>
+        <div id="blockSearchDetail" class="block-search-detail"></div>
+      </div>
+    </div>
+
+    <button type="button" id="detailRestoreBtn" class="detail-restore" hidden>
+      Reopen <span id="detailRestoreName">block detail</span>
+    </button>
+  </body>
+</html>

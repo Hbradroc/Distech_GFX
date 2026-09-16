@@ -826,7 +826,7 @@ const GfxCore = (() => {
 
   function serializeXmlDocument(doc, encoding = "utf-8") {
     const serialized = new XMLSerializer().serializeToString(doc.documentElement);
-    return `<?xml version="1.0" encoding="${encoding}"}?>\n${serialized}`;
+    return `<?xml version="1.0" encoding="${encoding}"?>\n${serialized}`;
   }
 
   function encodeXmlText(text, encoding) {
